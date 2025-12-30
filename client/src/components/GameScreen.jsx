@@ -195,8 +195,7 @@ export default function GameScreen({ showResults = false }) {
                   playerName={player.name}
                   solved={player.solved}
                   score={player.roundScore}
-                  guessCount={player.guessCount}
-                  lastGuessColors={player.lastGuessColors}
+                  guessResults={player.guessResults || []}
                   showingOther={true}
                 />
               </div>

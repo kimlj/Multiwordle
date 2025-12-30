@@ -1,9 +1,9 @@
 import React from 'react';
 
-export default function WordleGrid({ 
-  guesses = [], 
-  results = [], 
-  currentInput = '', 
+export default function WordleGrid({
+  guesses = [],
+  results = [],
+  currentInput = '',
   maxGuesses = 6,
   isCurrentPlayer = false,
   playerName = '',
@@ -11,35 +11,42 @@ export default function WordleGrid({
   score = 0,
   guessCount = 0,
   lastGuessColors = null,
-  showingOther = false
+  showingOther = false,
+  guessResults = [] // Array of status arrays for other players' colored grids
 }) {
   const rows = [];
-  
+
   for (let i = 0; i < maxGuesses; i++) {
     const guess = guesses[i];
     const result = results[i];
+    const otherResult = guessResults[i]; // Status array for other players
     const isCurrentRow = i === guesses.length && isCurrentPlayer && !solved;
-    
+
     const cells = [];
     for (let j = 0; j < 5; j++) {
       let letter = '';
       let status = '';
       let animate = false;
-      
+
       if (guess && result) {
+        // Current player with full guess data
         letter = guess[j];
         status = result[j]?.status || '';
+        animate = true;
+      } else if (otherResult && otherResult[j]) {
+        // Other player - show colored cell without letter
+        status = otherResult[j];
         animate = true;
       } else if (isCurrentRow && currentInput[j]) {
         letter = currentInput[j];
       }
-      
+
       cells.push(
         <div
           key={j}
           className={`
-            w-12 h-12 md:w-14 md:h-14 
-            flex items-center justify-center 
+            ${showingOther && !isCurrentPlayer ? 'w-8 h-8 md:w-10 md:h-10' : 'w-12 h-12 md:w-14 md:h-14'}
+            flex items-center justify-center
             text-xl md:text-2xl font-bold uppercase
             border-2 transition-all duration-200
             ${letter && !status ? 'border-white/50 tile-pop' : 'border-white/20'}
@@ -48,7 +55,7 @@ export default function WordleGrid({
             ${status === 'absent' ? 'status-absent' : ''}
             ${animate ? 'tile-flip' : ''}
           `}
-          style={{ 
+          style={{
             animationDelay: animate ? `${j * 0.1}s` : '0s',
             backgroundColor: !status ? 'transparent' : undefined
           }}
@@ -57,9 +64,9 @@ export default function WordleGrid({
         </div>
       );
     }
-    
+
     rows.push(
-      <div key={i} className="flex gap-1.5 justify-center">
+      <div key={i} className="flex gap-1 justify-center">
         {cells}
       </div>
     );
@@ -93,19 +100,6 @@ export default function WordleGrid({
       <div className="flex flex-col gap-1.5">
         {rows}
       </div>
-      
-      {/* Other player's progress indicator */}
-      {showingOther && !isCurrentPlayer && guessCount > 0 && !solved && (
-        <div className="mt-3 flex items-center justify-center gap-2 text-sm text-white/60">
-          <span>{guessCount} guess{guessCount !== 1 ? 'es' : ''}</span>
-          {lastGuessColors && (
-            <span className="flex gap-1">
-              <span className="text-wordle-green">{lastGuessColors.green}🟩</span>
-              <span className="text-wordle-yellow">{lastGuessColors.yellow}🟨</span>
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

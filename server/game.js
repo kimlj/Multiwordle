@@ -319,8 +319,12 @@ export class GameRoom {
         solvedInGuesses: player.solvedInGuesses,
         totalScore: player.totalScore,
         roundScore: player.roundScore,
+        // Send all guess results (colors only, no letters) for other players to see progress
+        guessResults: player.results.map(result =>
+          result.map(cell => cell.status)
+        ),
         // Only show results (colors), not the actual letters guessed
-        lastGuessColors: player.results.length > 0 
+        lastGuessColors: player.results.length > 0
           ? countColors(player.results[player.results.length - 1])
           : null
       };
