@@ -1,0 +1,304 @@
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --green: #6aaa64;
+  --yellow: #c9b458;
+  --gray: #787c7e;
+  --dark-bg: #121213;
+  --tile-bg: #3a3a3c;
+  --border: #565758;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: linear-gradient(135deg, #0a0a0b 0%, #1a1a1d 50%, #0d0d0e 100%);
+  color: #ffffff;
+  overflow-x: hidden;
+}
+
+/* Background pattern */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(106, 170, 100, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(201, 180, 88, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Grid noise texture */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Tile animations */
+.tile-flip {
+  animation: tileFlip 0.5s ease forwards;
+}
+
+@keyframes tileFlip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(-90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+.tile-pop {
+  animation: tilePop 0.1s ease-out;
+}
+
+@keyframes tilePop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.tile-shake {
+  animation: tileShake 0.5s ease-in-out;
+}
+
+@keyframes tileShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-5px);
+  }
+  40%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+/* Status colors */
+.status-correct {
+  background: var(--green) !important;
+  border-color: var(--green) !important;
+}
+
+.status-present {
+  background: var(--yellow) !important;
+  border-color: var(--yellow) !important;
+}
+
+.status-absent {
+  background: var(--gray) !important;
+  border-color: var(--gray) !important;
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 20px rgba(106, 170, 100, 0.4);
+}
+
+.glow-yellow {
+  box-shadow: 0 0 20px rgba(201, 180, 88, 0.4);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Keyboard key styles */
+.key {
+  @apply flex items-center justify-center rounded-md font-bold uppercase cursor-pointer select-none transition-all;
+  background: #818384;
+  min-width: 43px;
+  height: 58px;
+  padding: 0 12px;
+}
+
+.key:hover {
+  filter: brightness(1.1);
+}
+
+.key:active {
+  transform: scale(0.95);
+}
+
+.key.correct {
+  background: var(--green);
+}
+
+.key.present {
+  background: var(--yellow);
+}
+
+.key.absent {
+  background: #3a3a3c;
+}
+
+/* Timer pulse */
+.timer-critical {
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% {
+    color: #ef4444;
+  }
+  50% {
+    color: #fca5a5;
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  }
+}
+
+/* Player card highlight */
+.player-you {
+  background: linear-gradient(135deg, rgba(106, 170, 100, 0.15) 0%, rgba(106, 170, 100, 0.05) 100%);
+  border-color: rgba(106, 170, 100, 0.4);
+}
+
+.player-solved {
+  border-color: var(--green);
+  box-shadow: 0 0 15px rgba(106, 170, 100, 0.3);
+}
+
+/* Toast notifications */
+.toast {
+  animation: toastSlide 0.3s ease-out;
+}
+
+@keyframes toastSlide {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Leaderboard animation */
+.leaderboard-item {
+  animation: leaderboardSlide 0.5s ease-out backwards;
+}
+
+@keyframes leaderboardSlide {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Button hover effects */
+.btn-primary {
+  @apply px-6 py-3 bg-wordle-green text-white font-bold rounded-lg transition-all;
+  box-shadow: 0 4px 15px rgba(106, 170, 100, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(106, 170, 100, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  @apply px-6 py-3 bg-transparent border-2 border-white/30 text-white font-bold rounded-lg transition-all;
+}
+
+.btn-secondary:hover {
+  border-color: white/50;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Input styles */
+.input-dark {
+  @apply w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/40 outline-none transition-all;
+}
+
+.input-dark:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(106, 170, 100, 0.2);
+}
+
+/* Countdown overlay */
+.countdown-number {
+  font-family: 'Clash Display', sans-serif;
+  font-size: 12rem;
+  font-weight: 700;
+  animation: countdownPop 1s ease-out;
+}
+
+@keyframes countdownPop {
+  0% {
+    transform: scale(2);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

@@ -1,0 +1,528 @@
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { GameManager } from './game.js';
+import { isValidWord } from './words.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const server = createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+const gameManager = new GameManager();
+const playerRooms = new Map(); // playerId -> roomCode
+
+// Timer management
+const roomTimers = new Map();
+
+function clearRoomTimers(roomCode) {
+  const timers = roomTimers.get(roomCode);
+  if (timers) {
+    if (timers.countdown) clearInterval(timers.countdown);
+    if (timers.round) clearInterval(timers.round);
+    if (timers.guess) clearInterval(timers.guess);
+    if (timers.nextRound) clearInterval(timers.nextRound);
+    roomTimers.delete(roomCode);
+  }
+}
+
+function startCountdownTimer(roomCode) {
+  let countdown = 5;
+  const room = gameManager.getRoom(roomCode);
+  if (!room) return;
+  
+  room.startCountdown();
+  
+  const timer = setInterval(() => {
+    io.to(roomCode).emit('countdown', { seconds: countdown });
+    
+    if (countdown <= 0) {
+      clearInterval(timer);
+      startRound(roomCode);
+    }
+    countdown--;
+  }, 1000);
+  
+  roomTimers.set(roomCode, { countdown: timer });
+}
+
+function startRound(roomCode, customWord = null) {
+  const room = gameManager.getRoom(roomCode);
+  if (!room) return;
+
+  // Priority: direct customWord > customWords array for this round > random
+  let wordToUse = customWord;
+
+  if (!wordToUse && room.settings.customWords && room.settings.customWords.length > 0) {
+    // Get word for current round (0-indexed, but currentRound will be incremented in startRound)
+    const roundIndex = room.currentRound; // This is the upcoming round (0-indexed before increment)
+    if (roundIndex < room.settings.customWords.length) {
+      wordToUse = room.settings.customWords[roundIndex];
+    }
+  }
+
+  // Fallback to single custom word
+  if (!wordToUse) {
+    wordToUse = room.settings.customWord || null;
+    room.settings.customWord = null;
+  }
+
+  room.startRound(wordToUse);
+  
+  // Send round start to all players
+  io.to(roomCode).emit('roundStart', {
+    round: room.currentRound,
+    totalRounds: room.settings.rounds,
+    roundTimeSeconds: room.settings.roundTimeSeconds,
+    guessTimeSeconds: room.settings.guessTimeSeconds
+  });
+
+  // Send initial playerState to each player
+  for (const [playerId, player] of room.players) {
+    const playerSocket = io.sockets.sockets.get(playerId);
+    if (playerSocket) {
+      playerSocket.emit('playerState', room.getPlayerState(playerId));
+    }
+  }
+
+  // Also send initial game state
+  io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+
+  // Start round timer
+  const roundTimer = setInterval(() => {
+    const remaining = room.getRoundTimeRemaining();
+    const guessRemaining = room.getGuessTimeRemaining();
+    
+    io.to(roomCode).emit('timerUpdate', {
+      roundTimeRemaining: remaining,
+      guessTimeRemaining: guessRemaining
+    });
+    
+    // Check if round is over
+    if (room.isRoundOver()) {
+      clearInterval(roundTimer);
+      endRound(roomCode);
+    }
+  }, 1000);
+  
+  const timers = roomTimers.get(roomCode) || {};
+  timers.round = roundTimer;
+  roomTimers.set(roomCode, timers);
+}
+
+function endRound(roomCode) {
+  const room = gameManager.getRoom(roomCode);
+  if (!room) return;
+
+  clearRoomTimers(roomCode);
+  const roundResult = room.endRound();
+
+  // Calculate detailed stats for each player
+  const playerStats = {};
+  for (const [playerId, player] of room.players) {
+    if (player.solved) {
+      const solveTimeMs = player.solvedAt - room.roundStartTime;
+      const solveTimeSec = Math.floor(solveTimeMs / 1000);
+      playerStats[playerId] = {
+        solved: true,
+        guesses: player.solvedInGuesses,
+        timeSeconds: solveTimeSec,
+        baseScore: 1000,
+        guessBonus: (7 - player.solvedInGuesses) * 150,
+        timeBonus: Math.floor(((room.settings.roundTimeSeconds * 1000 - solveTimeMs) / (room.settings.roundTimeSeconds * 1000)) * 500),
+        totalScore: player.roundScore
+      };
+    } else {
+      playerStats[playerId] = {
+        solved: false,
+        guesses: player.guesses.length,
+        totalScore: 0
+      };
+    }
+  }
+
+  // Send full results including the word and detailed stats
+  io.to(roomCode).emit('roundEnd', {
+    ...roundResult,
+    word: room.targetWord,
+    playerStats,
+    gameState: room.getPublicState()
+  });
+
+  // Send individual player states with their guesses revealed
+  for (const [playerId, player] of room.players) {
+    const socket = io.sockets.sockets.get(playerId);
+    if (socket) {
+      socket.emit('playerState', room.getPlayerState(playerId));
+    }
+  }
+
+  // Check if game is over
+  if (room.isGameOver()) {
+    setTimeout(() => endGame(roomCode), 5000);
+  } else {
+    // Auto-start next round after 5 seconds
+    startNextRoundCountdown(roomCode);
+  }
+}
+
+function startNextRoundCountdown(roomCode) {
+  let countdown = 5;
+  const room = gameManager.getRoom(roomCode);
+  if (!room) return;
+
+  const timer = setInterval(() => {
+    io.to(roomCode).emit('nextRoundCountdown', { seconds: countdown });
+
+    if (countdown <= 0) {
+      clearInterval(timer);
+      startRound(roomCode);
+    }
+    countdown--;
+  }, 1000);
+
+  const timers = roomTimers.get(roomCode) || {};
+  timers.nextRound = timer;
+  roomTimers.set(roomCode, timers);
+}
+
+function endGame(roomCode) {
+  const room = gameManager.getRoom(roomCode);
+  if (!room) return;
+  
+  const finalResults = room.endGame();
+  io.to(roomCode).emit('gameEnd', finalResults);
+}
+
+io.on('connection', (socket) => {
+  console.log(`Player connected: ${socket.id}`);
+  
+  // Create a new room
+  socket.on('createRoom', ({ playerName, settings }, callback) => {
+    const room = gameManager.createRoom(socket.id, playerName, settings);
+    playerRooms.set(socket.id, room.roomCode);
+    socket.join(room.roomCode);
+    
+    callback({
+      success: true,
+      roomCode: room.roomCode,
+      gameState: room.getPublicState(),
+      playerId: socket.id
+    });
+    
+    console.log(`Room ${room.roomCode} created by ${playerName}`);
+  });
+  
+  // Join an existing room
+  socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
+    const room = gameManager.getRoom(roomCode);
+    
+    if (!room) {
+      callback({ success: false, error: 'Room not found' });
+      return;
+    }
+    
+    if (room.state !== 'lobby') {
+      callback({ success: false, error: 'Game already in progress' });
+      return;
+    }
+    
+    if (!room.addPlayer(socket.id, playerName)) {
+      callback({ success: false, error: 'Could not join room' });
+      return;
+    }
+    
+    playerRooms.set(socket.id, roomCode);
+    socket.join(roomCode);
+    
+    callback({
+      success: true,
+      roomCode,
+      gameState: room.getPublicState(),
+      playerId: socket.id
+    });
+    
+    // Notify other players
+    socket.to(roomCode).emit('playerJoined', {
+      playerId: socket.id,
+      playerName,
+      gameState: room.getPublicState()
+    });
+    
+    console.log(`${playerName} joined room ${roomCode}`);
+  });
+  
+  // Update player name
+  socket.on('updateName', ({ newName }) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+    
+    const room = gameManager.getRoom(roomCode);
+    if (!room) return;
+    
+    room.updatePlayerName(socket.id, newName);
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+  });
+  
+  // Toggle ready status
+  socket.on('toggleReady', (callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+    
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'lobby') return;
+    
+    const player = room.players.get(socket.id);
+    if (!player) return;
+    
+    room.setPlayerReady(socket.id, !player.ready);
+    
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+
+    callback({ ready: !player.ready });
+  });
+  
+  // Update game settings (host only)
+  socket.on('updateSettings', ({ settings }) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+    
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id || room.state !== 'lobby') return;
+    
+    room.settings = { ...room.settings, ...settings };
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+  });
+  
+  // Start game (host only, or set custom words)
+  socket.on('startGame', ({ customWord, customWords } = {}, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id) {
+      if (callback) callback({ success: false, error: 'Not the host' });
+      return;
+    }
+
+    if (room.state === 'lobby') {
+      // Validate and set array of custom words (one per round)
+      if (customWords && Array.isArray(customWords)) {
+        const validatedWords = [];
+        for (const word of customWords) {
+          if (word && word.length === 5) {
+            const upperWord = word.toUpperCase();
+            if (!isValidWord(upperWord)) {
+              if (callback) callback({ success: false, error: `"${word}" is not a valid word` });
+              return;
+            }
+            validatedWords.push(upperWord);
+          }
+        }
+        room.settings.customWords = validatedWords;
+      }
+
+      // Single custom word (legacy support)
+      if (customWord && customWord.length === 5) {
+        const word = customWord.toUpperCase();
+        if (!isValidWord(word)) {
+          if (callback) callback({ success: false, error: 'Not a valid word' });
+          return;
+        }
+        room.settings.customWord = word;
+      }
+
+      startCountdownTimer(roomCode);
+      if (callback) callback({ success: true });
+    }
+  });
+  
+  // Submit a guess
+  socket.on('submitGuess', ({ guess }, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+    
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'playing') {
+      callback({ success: false, error: 'Game not in progress' });
+      return;
+    }
+    
+    const result = room.submitGuess(socket.id, guess);
+    
+    if (result.success) {
+      // Send result to the guessing player
+      callback(result);
+      
+      // Send player's full state
+      socket.emit('playerState', room.getPlayerState(socket.id));
+      
+      // Broadcast update to all players (without revealing letters)
+      io.to(roomCode).emit('guessSubmitted', {
+        playerId: socket.id,
+        guessNumber: result.guessNumber,
+        colors: result.colors,
+        solved: result.solved,
+        score: result.score,
+        gameState: room.getPublicState()
+      });
+      
+      // Check if round is over
+      if (room.isRoundOver()) {
+        setTimeout(() => endRound(roomCode), 1000);
+      }
+    } else {
+      callback(result);
+    }
+  });
+  
+  // Start next round
+  socket.on('nextRound', ({ customWord } = {}, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'roundEnd') return;
+
+    // Only host can start next round
+    if (socket.id === room.hostId) {
+      // Validate custom word against the word list
+      if (customWord && customWord.length === 5) {
+        const word = customWord.toUpperCase();
+        if (!isValidWord(word)) {
+          if (callback) callback({ success: false, error: 'Not a valid word' });
+          return;
+        }
+        startRound(roomCode, word);
+      } else {
+        startRound(roomCode, null);
+      }
+      if (callback) callback({ success: true });
+    }
+  });
+
+  // Force end current round (host only)
+  socket.on('forceEndRound', () => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id || room.state !== 'playing') return;
+
+    endRound(roomCode);
+  });
+
+  // End game and return to lobby (host only)
+  socket.on('endGame', () => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id) return;
+
+    clearRoomTimers(roomCode);
+
+    // Reset game state to lobby
+    room.state = 'lobby';
+    room.currentRound = 0;
+    room.targetWord = null;
+    room.roundScores = [];
+
+    for (const player of room.players.values()) {
+      player.ready = false;
+      player.guesses = [];
+      player.results = [];
+      player.solved = false;
+      player.solvedAt = null;
+      player.solvedInGuesses = 0;
+      player.totalScore = 0;
+      player.roundScore = 0;
+    }
+
+    io.to(roomCode).emit('gameReset', room.getPublicState());
+  });
+  
+  // Play again (reset game)
+  socket.on('playAgain', () => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+    
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id) return;
+    
+    // Reset game state
+    room.state = 'lobby';
+    room.currentRound = 0;
+    room.targetWord = null;
+    room.roundScores = [];
+    
+    for (const player of room.players.values()) {
+      player.ready = false;
+      player.guesses = [];
+      player.results = [];
+      player.solved = false;
+      player.solvedAt = null;
+      player.solvedInGuesses = 0;
+      player.totalScore = 0;
+      player.roundScore = 0;
+    }
+    
+    io.to(roomCode).emit('gameReset', room.getPublicState());
+  });
+  
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    const roomCode = playerRooms.get(socket.id);
+    if (roomCode) {
+      const room = gameManager.getRoom(roomCode);
+      if (room) {
+        const remaining = room.removePlayer(socket.id);
+        
+        if (remaining === 0) {
+          clearRoomTimers(roomCode);
+          gameManager.deleteRoom(roomCode);
+          console.log(`Room ${roomCode} deleted (empty)`);
+        } else {
+          io.to(roomCode).emit('playerLeft', {
+            playerId: socket.id,
+            newHostId: room.hostId,
+            gameState: room.getPublicState()
+          });
+        }
+      }
+      playerRooms.delete(socket.id);
+    }
+    console.log(`Player disconnected: ${socket.id}`);
+  });
+});
+
+// Serve React app for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`🎮 Wordle Multiplayer server running on port ${PORT}`);
+});
