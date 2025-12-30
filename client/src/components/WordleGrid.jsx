@@ -9,7 +9,8 @@ export default function WordleGrid({
   playerName = '',
   solved = false,
   score = 0,
-  guessResults = []
+  guessResults = [],
+  large = false // Large mode for solo view
 }) {
   const rows = [];
 
@@ -36,14 +37,19 @@ export default function WordleGrid({
         letter = currentInput[j];
       }
 
+      // Cell size based on large prop
+      const cellSize = large
+        ? 'w-14 h-14 sm:w-16 sm:h-16 text-2xl sm:text-3xl'
+        : 'w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm';
+
       cells.push(
         <div
           key={j}
           className={`
-            w-6 h-6 sm:w-7 sm:h-7
+            ${cellSize}
             flex items-center justify-center
-            text-xs sm:text-sm font-bold uppercase
-            border border-white/20
+            font-bold uppercase
+            border-2 border-white/20
             ${letter && !status ? 'border-white/50' : ''}
             ${status === 'correct' ? 'status-correct' : ''}
             ${status === 'present' ? 'status-present' : ''}
@@ -60,7 +66,7 @@ export default function WordleGrid({
     }
 
     rows.push(
-      <div key={i} className="flex gap-0.5 justify-center">
+      <div key={i} className={`flex ${large ? 'gap-1.5' : 'gap-0.5'} justify-center`}>
         {cells}
       </div>
     );
@@ -69,15 +75,15 @@ export default function WordleGrid({
   return (
     <div className="flex flex-col items-center">
       {/* Player name */}
-      <div className={`text-[10px] sm:text-xs font-bold mb-0.5 truncate max-w-full flex items-center gap-1 ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/70'}`}>
-        <span className="truncate max-w-[60px] sm:max-w-[80px]">{playerName}</span>
-        {isCurrentPlayer && <span className="text-[8px]">(You)</span>}
+      <div className={`${large ? 'text-sm sm:text-base mb-1' : 'text-[10px] sm:text-xs mb-0.5'} font-bold truncate max-w-full flex items-center gap-1 ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/70'}`}>
+        <span className={`truncate ${large ? 'max-w-[120px]' : 'max-w-[60px] sm:max-w-[80px]'}`}>{playerName}</span>
+        {isCurrentPlayer && <span className={large ? 'text-xs' : 'text-[8px]'}>(You)</span>}
         {solved && <span className="text-wordle-green">✓</span>}
-        {score > 0 && <span className="text-wordle-green text-[8px]">+{score}</span>}
+        {score > 0 && <span className={`text-wordle-green ${large ? 'text-xs' : 'text-[8px]'}`}>+{score}</span>}
       </div>
 
       {/* Grid - no container */}
-      <div className={`flex flex-col gap-0.5 ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded p-0.5' : ''}`}>
+      <div className={`flex flex-col ${large ? 'gap-1.5 p-1' : 'gap-0.5 p-0.5'} ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded' : ''}`}>
         {rows}
       </div>
     </div>

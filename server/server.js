@@ -43,6 +43,10 @@ const playerRooms = new Map(); // playerId -> roomCode
 // Timer management
 const roomTimers = new Map();
 
+// Track disconnected players for reconnection (playerName:roomCode -> { playerId, disconnectTime, playerData })
+const disconnectedPlayers = new Map();
+const RECONNECT_WINDOW_MS = 60000; // 60 seconds to reconnect
+
 function clearRoomTimers(roomCode) {
   const timers = roomTimers.get(roomCode);
   if (timers) {
@@ -297,7 +301,86 @@ io.on('connection', (socket) => {
     
     console.log(`${playerName} joined room ${roomCode}`);
   });
-  
+
+  // Rejoin room (for reconnecting players)
+  socket.on('rejoinRoom', ({ roomCode, playerName }, callback) => {
+    const room = gameManager.getRoom(roomCode);
+
+    if (!room) {
+      callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    const disconnectKey = `${playerName}:${roomCode}`;
+    const disconnectedPlayer = disconnectedPlayers.get(disconnectKey);
+
+    // Check if this player was recently disconnected
+    if (disconnectedPlayer && Date.now() - disconnectedPlayer.disconnectTime < RECONNECT_WINDOW_MS) {
+      // Restore the player with their data
+      const playerData = disconnectedPlayer.playerData;
+
+      // Add player back to room with their existing data
+      room.players.set(socket.id, {
+        ...playerData,
+        id: socket.id
+      });
+
+      playerRooms.set(socket.id, roomCode);
+      socket.join(roomCode);
+      disconnectedPlayers.delete(disconnectKey);
+
+      // Notify others
+      socket.to(roomCode).emit('playerJoined', {
+        playerId: socket.id,
+        playerName,
+        gameState: room.getPublicState()
+      });
+
+      callback({
+        success: true,
+        roomCode,
+        playerId: socket.id,
+        gameState: room.getPublicState(),
+        playerState: room.getPlayerState(socket.id)
+      });
+
+      console.log(`${playerName} reconnected to room ${roomCode}`);
+      return;
+    }
+
+    // If not a disconnected player, only allow rejoining in lobby state
+    if (room.state !== 'lobby') {
+      callback({ success: false, error: 'Game already in progress' });
+      return;
+    }
+
+    // Add as new player (same as joinRoom)
+    if (!room.addPlayer(socket.id, playerName)) {
+      callback({ success: false, error: 'Could not join room' });
+      return;
+    }
+
+    playerRooms.set(socket.id, roomCode);
+    socket.join(roomCode);
+
+    callback({
+      success: true,
+      roomCode,
+      playerId: socket.id,
+      gameState: room.getPublicState(),
+      playerState: null
+    });
+
+    // Notify other players
+    socket.to(roomCode).emit('playerJoined', {
+      playerId: socket.id,
+      playerName,
+      gameState: room.getPublicState()
+    });
+
+    console.log(`${playerName} rejoined room ${roomCode} as new player`);
+  });
+
   // Update player name
   socket.on('updateName', ({ newName }) => {
     const roomCode = playerRooms.get(socket.id);
@@ -597,11 +680,37 @@ io.on('connection', (socket) => {
     if (roomCode) {
       const room = gameManager.getRoom(roomCode);
       if (room) {
+        const player = room.players.get(socket.id);
+
+        // Save player data for potential reconnection
+        if (player) {
+          const disconnectKey = `${player.name}:${roomCode}`;
+          disconnectedPlayers.set(disconnectKey, {
+            playerId: socket.id,
+            disconnectTime: Date.now(),
+            playerData: { ...player }
+          });
+
+          // Clean up old disconnected players periodically
+          setTimeout(() => {
+            const stored = disconnectedPlayers.get(disconnectKey);
+            if (stored && Date.now() - stored.disconnectTime >= RECONNECT_WINDOW_MS) {
+              disconnectedPlayers.delete(disconnectKey);
+            }
+          }, RECONNECT_WINDOW_MS + 1000);
+        }
+
         const remaining = room.removePlayer(socket.id);
-        
+
         if (remaining === 0) {
           clearRoomTimers(roomCode);
           gameManager.deleteRoom(roomCode);
+          // Also clean up any disconnected players for this room
+          for (const [key] of disconnectedPlayers) {
+            if (key.endsWith(`:${roomCode}`)) {
+              disconnectedPlayers.delete(key);
+            }
+          }
           console.log(`Room ${roomCode} deleted (empty)`);
         } else {
           io.to(roomCode).emit('playerLeft', {

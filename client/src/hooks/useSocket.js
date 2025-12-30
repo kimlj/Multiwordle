@@ -3,8 +3,44 @@ import { io } from 'socket.io-client';
 import { useGameStore } from '../lib/store';
 
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+const SESSION_KEY = 'wordle_session';
 
 let socket = null;
+
+// Save session to localStorage
+function saveSession(roomCode, playerName) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, playerName, timestamp: Date.now() }));
+  } catch (e) {
+    console.warn('Could not save session:', e);
+  }
+}
+
+// Get session from localStorage
+function getSession() {
+  try {
+    const data = localStorage.getItem(SESSION_KEY);
+    if (data) {
+      const session = JSON.parse(data);
+      // Session expires after 1 hour
+      if (Date.now() - session.timestamp < 60 * 60 * 1000) {
+        return session;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not get session:', e);
+  }
+  return null;
+}
+
+// Clear session
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch (e) {
+    console.warn('Could not clear session:', e);
+  }
+}
 
 export function useSocket() {
   const {
@@ -27,13 +63,40 @@ export function useSocket() {
   useEffect(() => {
     if (!socket) {
       socket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
       });
       setSocket(socket);
 
       socket.on('connect', () => {
         console.log('Connected to server');
         setConnected(true);
+
+        // Try to rejoin on reconnect
+        const session = getSession();
+        if (session && session.roomCode) {
+          console.log('Attempting to rejoin room:', session.roomCode);
+          socket.emit('rejoinRoom', {
+            roomCode: session.roomCode,
+            playerName: session.playerName
+          }, (response) => {
+            if (response.success) {
+              setPlayerId(response.playerId);
+              setRoomCode(response.roomCode);
+              setGameState(response.gameState);
+              if (response.playerState) {
+                setPlayerState(response.playerState);
+              }
+              showToast('Reconnected to game!', 2000);
+            } else {
+              // Room no longer exists or can't rejoin
+              clearSession();
+            }
+          });
+        }
       });
 
       socket.on('disconnect', () => {
@@ -112,6 +175,13 @@ export function useSocket() {
 
       socket.on('kicked', ({ message }) => {
         showToast(message, 3000);
+        clearSession();
+        useGameStore.getState().resetGame();
+      });
+
+      socket.on('roomClosed', () => {
+        showToast('Room was closed', 2000);
+        clearSession();
         useGameStore.getState().resetGame();
       });
     }
@@ -129,6 +199,7 @@ export function useSocket() {
           setRoomCode(response.roomCode);
           setIsHost(true);
           setGameState(response.gameState);
+          saveSession(response.roomCode, playerName);
           resolve(response);
         } else {
           reject(new Error(response.error));
@@ -145,6 +216,7 @@ export function useSocket() {
           setRoomCode(response.roomCode);
           setIsHost(false);
           setGameState(response.gameState);
+          saveSession(response.roomCode, playerName);
           resolve(response);
         } else {
           reject(new Error(response.error));
@@ -225,6 +297,7 @@ export function useSocket() {
   const leaveRoom = useCallback(() => {
     return new Promise((resolve) => {
       socket.emit('leaveRoom', (response) => {
+        clearSession();
         useGameStore.getState().resetGame();
         resolve(response);
       });

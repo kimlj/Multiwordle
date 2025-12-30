@@ -3,7 +3,10 @@ import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 
 export default function LobbyScreen() {
-  const { gameState, playerId, roomCode, isHost, showToast } = useGameStore();
+  const { gameState, playerId, roomCode, showToast } = useGameStore();
+
+  // Derive isHost from gameState to prevent sync issues
+  const isHost = gameState?.hostId === playerId;
   const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom } = useSocket();
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');

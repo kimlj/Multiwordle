@@ -23,10 +23,13 @@ export default function HomeScreen() {
     const params = new URLSearchParams(window.location.search);
     const roomFromUrl = params.get('room');
     if (roomFromUrl) {
-      const code = roomFromUrl.toUpperCase();
-      setRoomCode(code);
-      setRoomFromLink(true);
-      setView('join');
+      // Clean the room code - remove any non-alphanumeric characters and uppercase
+      const code = roomFromUrl.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+      if (code.length === 6) {
+        setRoomCode(code);
+        setRoomFromLink(true);
+        setView('join');
+      }
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -34,10 +37,11 @@ export default function HomeScreen() {
 
   // Fetch room info when we have a room code from link
   useEffect(() => {
-    if (roomFromLink && roomCode && socket && connected) {
+    if (roomFromLink && roomCode && roomCode.length === 6 && socket && connected) {
       socket.emit('getRoomInfo', { roomCode }, (response) => {
         if (response.success) {
           setHostName(response.hostName);
+          setError(''); // Clear any previous error
         } else {
           setError(response.error || 'Room not found');
         }
