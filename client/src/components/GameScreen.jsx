@@ -16,7 +16,8 @@ export default function GameScreen({ showResults = false }) {
     showToast,
     isHost,
     roundEndData,
-    nextRoundCountdown
+    nextRoundCountdown,
+    keyboardStatus
   } = useGameStore();
 
   const { submitGuess, forceEndRound, endGame } = useSocket();
@@ -240,26 +241,49 @@ export default function GameScreen({ showResults = false }) {
         </div>
       </div>
 
-      {/* Input indicator for current player */}
+      {/* Input indicator and letter status */}
       {canType && (
-        <div className="mt-2 text-center">
-          <div className="inline-flex items-center gap-1 glass rounded-lg px-3 py-1.5">
-            <span className="text-sm font-mono tracking-widest min-w-[80px]">
-              {currentInput.padEnd(5, '_')}
-            </span>
-            <button
-              onClick={removeLetter}
-              className="ml-2 px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded text-xs"
-            >
-              Del
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={currentInput.length !== 5}
-              className="px-2 py-0.5 bg-wordle-green/80 hover:bg-wordle-green rounded text-xs disabled:opacity-50"
-            >
-              Enter
-            </button>
+        <div className="mt-2 space-y-2">
+          {/* Input bar */}
+          <div className="text-center">
+            <div className="inline-flex items-center gap-1 glass rounded-lg px-3 py-1.5">
+              <span className="text-sm font-mono tracking-widest min-w-[80px]">
+                {currentInput.padEnd(5, '_')}
+              </span>
+              <button
+                onClick={removeLetter}
+                className="ml-2 px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded text-xs"
+              >
+                Del
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={currentInput.length !== 5}
+                className="px-2 py-0.5 bg-wordle-green/80 hover:bg-wordle-green rounded text-xs disabled:opacity-50"
+              >
+                Enter
+              </button>
+            </div>
+          </div>
+
+          {/* Letter status - compact alphabet display */}
+          <div className="flex justify-center gap-0.5 flex-wrap max-w-md mx-auto px-2">
+            {'QWERTYUIOPASDFGHJKLZXCVBNM'.split('').map((letter) => {
+              const status = keyboardStatus[letter];
+              return (
+                <div
+                  key={letter}
+                  className={`w-5 h-6 sm:w-6 sm:h-7 flex items-center justify-center text-[10px] sm:text-xs font-bold rounded
+                    ${status === 'correct' ? 'bg-wordle-green text-white' : ''}
+                    ${status === 'present' ? 'bg-wordle-yellow text-white' : ''}
+                    ${status === 'absent' ? 'bg-white/10 text-white/30 line-through' : ''}
+                    ${!status ? 'bg-white/5 text-white/60' : ''}
+                  `}
+                >
+                  {letter}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
