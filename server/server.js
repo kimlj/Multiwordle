@@ -503,7 +503,76 @@ io.on('connection', (socket) => {
     
     io.to(roomCode).emit('gameReset', room.getPublicState());
   });
-  
+
+  // Kick player (host only)
+  socket.on('kickPlayer', ({ targetPlayerId }, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.hostId !== socket.id) {
+      if (callback) callback({ success: false, error: 'Not the host' });
+      return;
+    }
+
+    if (targetPlayerId === socket.id) {
+      if (callback) callback({ success: false, error: 'Cannot kick yourself' });
+      return;
+    }
+
+    const targetSocket = io.sockets.sockets.get(targetPlayerId);
+    if (room.kickPlayer(targetPlayerId)) {
+      playerRooms.delete(targetPlayerId);
+
+      // Notify the kicked player
+      if (targetSocket) {
+        targetSocket.emit('kicked', { message: 'You have been kicked from the room' });
+        targetSocket.leave(roomCode);
+      }
+
+      // Notify remaining players
+      io.to(roomCode).emit('playerKicked', {
+        playerId: targetPlayerId,
+        gameState: room.getPublicState()
+      });
+
+      if (callback) callback({ success: true });
+    } else {
+      if (callback) callback({ success: false, error: 'Could not kick player' });
+    }
+  });
+
+  // Leave room
+  socket.on('leaveRoom', (callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (room) {
+      const remaining = room.removePlayer(socket.id);
+      socket.leave(roomCode);
+
+      if (remaining === 0) {
+        clearRoomTimers(roomCode);
+        gameManager.deleteRoom(roomCode);
+      } else {
+        io.to(roomCode).emit('playerLeft', {
+          playerId: socket.id,
+          newHostId: room.hostId,
+          gameState: room.getPublicState()
+        });
+      }
+    }
+    playerRooms.delete(socket.id);
+    if (callback) callback({ success: true });
+  });
+
   // Handle disconnect
   socket.on('disconnect', () => {
     const roomCode = playerRooms.get(socket.id);

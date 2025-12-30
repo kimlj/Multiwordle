@@ -105,6 +105,15 @@ export function useSocket() {
           showToast('You are now the host!', 2000);
         }
       });
+
+      socket.on('playerKicked', ({ playerId, gameState }) => {
+        setGameState(gameState);
+      });
+
+      socket.on('kicked', ({ message }) => {
+        showToast(message, 3000);
+        useGameStore.getState().resetGame();
+      });
     }
 
     return () => {
@@ -201,6 +210,27 @@ export function useSocket() {
     socket.emit('endGame');
   }, []);
 
+  const kickPlayer = useCallback((targetPlayerId) => {
+    return new Promise((resolve, reject) => {
+      socket.emit('kickPlayer', { targetPlayerId }, (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to kick player'));
+        }
+      });
+    });
+  }, []);
+
+  const leaveRoom = useCallback(() => {
+    return new Promise((resolve) => {
+      socket.emit('leaveRoom', (response) => {
+        useGameStore.getState().resetGame();
+        resolve(response);
+      });
+    });
+  }, []);
+
   return {
     socket,
     createRoom,
@@ -213,6 +243,8 @@ export function useSocket() {
     nextRound,
     playAgain,
     forceEndRound,
-    endGame
+    endGame,
+    kickPlayer,
+    leaveRoom
   };
 }

@@ -96,11 +96,14 @@ export class GameRoom {
   
   addPlayer(playerId, playerName) {
     if (this.state !== 'lobby') return false;
-    
+
+    // Host is automatically ready
+    const isHost = playerId === this.hostId;
+
     this.players.set(playerId, {
       id: playerId,
       name: playerName,
-      ready: false,
+      ready: isHost, // Host is auto-ready
       guesses: [],
       results: [],
       solved: false,
@@ -111,6 +114,12 @@ export class GameRoom {
       roundScore: 0,
       connected: true
     });
+    return true;
+  }
+
+  kickPlayer(playerId) {
+    if (playerId === this.hostId) return false; // Can't kick host
+    this.players.delete(playerId);
     return true;
   }
   

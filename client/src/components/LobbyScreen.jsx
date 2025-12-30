@@ -3,8 +3,8 @@ import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 
 export default function LobbyScreen() {
-  const { gameState, playerId, roomCode, isHost, showToast, resetGame } = useGameStore();
-  const { toggleReady, updateSettings, startGame, updateName } = useSocket();
+  const { gameState, playerId, roomCode, isHost, showToast } = useGameStore();
+  const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom } = useSocket();
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [customWords, setCustomWords] = useState([]);
@@ -85,7 +85,7 @@ export default function LobbyScreen() {
       <div className="max-w-4xl mx-auto">
         {/* Leave Room Button */}
         <button
-          onClick={() => resetGame()}
+          onClick={() => leaveRoom()}
           className="mb-4 text-white/60 hover:text-white flex items-center gap-2 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,12 +166,27 @@ export default function LobbyScreen() {
                     )}
                   </div>
                   
-                  <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                    player.ready 
-                      ? 'bg-wordle-green/20 text-wordle-green' 
-                      : 'bg-white/10 text-white/40'
-                  }`}>
-                    {player.ready ? '✓ Ready' : 'Waiting'}
+                  <div className="flex items-center gap-2">
+                    <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                      player.ready
+                        ? 'bg-wordle-green/20 text-wordle-green'
+                        : 'bg-white/10 text-white/40'
+                    }`}>
+                      {player.ready ? '✓ Ready' : 'Waiting'}
+                    </div>
+                    {isHost && player.id !== playerId && (
+                      <button
+                        onClick={() => {
+                          kickPlayer(player.id).catch(err => showToast(err.message));
+                        }}
+                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+                        title="Kick player"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
