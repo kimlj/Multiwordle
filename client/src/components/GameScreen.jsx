@@ -232,9 +232,9 @@ export default function GameScreen({ showResults = false }) {
       {/* Tappable Keyboard */}
       {canType && (
         <div className="mt-auto pt-2">
-          <div className="flex flex-col gap-1 items-center">
+          <div className="flex flex-col gap-1.5 items-center">
             {KEYBOARD_ROWS.map((row, rowIdx) => (
-              <div key={rowIdx} className="flex gap-1 justify-center">
+              <div key={rowIdx} className="flex gap-1.5 justify-center">
                 {row.map((key) => {
                   const status = keyboardStatus[key];
                   const isWide = key === 'ENTER' || key === 'DEL';
@@ -243,8 +243,8 @@ export default function GameScreen({ showResults = false }) {
                       key={key}
                       onClick={() => handleKeyPress(key)}
                       className={`
-                        ${isWide ? 'px-2 sm:px-3 text-[10px] sm:text-xs' : 'w-7 sm:w-9 text-xs sm:text-sm'}
-                        h-10 sm:h-12 rounded font-bold
+                        ${isWide ? 'px-3 sm:px-4 text-xs sm:text-sm' : 'w-9 sm:w-11 text-sm sm:text-base'}
+                        h-12 sm:h-14 rounded-lg font-bold
                         transition-all active:scale-95
                         ${status === 'correct' ? 'bg-wordle-green text-white' : ''}
                         ${status === 'present' ? 'bg-wordle-yellow text-white' : ''}

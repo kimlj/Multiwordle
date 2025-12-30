@@ -39,7 +39,7 @@ export default function WordleGrid({
 
       // Cell size based on large prop
       const cellSize = large
-        ? 'w-14 h-14 sm:w-16 sm:h-16 text-2xl sm:text-3xl'
+        ? 'w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] text-3xl sm:text-4xl'
         : 'w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm';
 
       cells.push(
