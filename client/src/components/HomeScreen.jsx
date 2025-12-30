@@ -6,6 +6,8 @@ export default function HomeScreen() {
   const [view, setView] = useState('home'); // home, create, join
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [roomFromLink, setRoomFromLink] = useState(false); // Track if room code came from URL
+  const [hostName, setHostName] = useState(''); // Host name for shared links
   const [settings, setSettings] = useState({
     rounds: 3,
     roundTimeSeconds: 180
@@ -13,7 +15,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { createRoom, joinRoom } = useSocket();
+  const { createRoom, joinRoom, socket } = useSocket();
   const { connected } = useGameStore();
 
   // Check URL for room code on load
@@ -21,12 +23,27 @@ export default function HomeScreen() {
     const params = new URLSearchParams(window.location.search);
     const roomFromUrl = params.get('room');
     if (roomFromUrl) {
-      setRoomCode(roomFromUrl.toUpperCase());
+      const code = roomFromUrl.toUpperCase();
+      setRoomCode(code);
+      setRoomFromLink(true);
       setView('join');
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // Fetch room info when we have a room code from link
+  useEffect(() => {
+    if (roomFromLink && roomCode && socket && connected) {
+      socket.emit('getRoomInfo', { roomCode }, (response) => {
+        if (response.success) {
+          setHostName(response.hostName);
+        } else {
+          setError(response.error || 'Room not found');
+        }
+      });
+    }
+  }, [roomFromLink, roomCode, socket, connected]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -206,7 +223,12 @@ export default function HomeScreen() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <button
-            onClick={() => setView('home')}
+            onClick={() => {
+              setView('home');
+              setRoomFromLink(false);
+              setHostName('');
+              setError('');
+            }}
             className="mb-8 text-white/60 hover:text-white flex items-center gap-2 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,10 +236,17 @@ export default function HomeScreen() {
             </svg>
             Back
           </button>
-          
+
           <div className="glass rounded-2xl p-8">
-            <h2 className="font-display text-3xl font-bold mb-6">Join Game</h2>
-            
+            <h2 className="font-display text-3xl font-bold mb-2">Join Game</h2>
+
+            {/* Show host info if from shared link */}
+            {roomFromLink && hostName && (
+              <p className="text-white/60 mb-6">
+                Joining <span className="text-wordle-green font-bold">{hostName}</span>'s game
+              </p>
+            )}
+
             <form onSubmit={handleJoin} className="space-y-6">
               <div>
                 <label className="block text-sm text-white/60 mb-2">Your Name</label>
@@ -228,25 +257,27 @@ export default function HomeScreen() {
                   placeholder="Enter your name"
                   className="input-dark"
                   maxLength={20}
+                  autoFocus
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm text-white/60 mb-2">Room Code</label>
                 <input
                   type="text"
                   value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                  onChange={(e) => !roomFromLink && setRoomCode(e.target.value.toUpperCase())}
                   placeholder="Enter 6-letter code"
-                  className="input-dark text-center text-2xl tracking-widest font-mono"
+                  className={`input-dark text-center text-2xl tracking-widest font-mono ${roomFromLink ? 'bg-white/5 cursor-not-allowed' : ''}`}
                   maxLength={6}
+                  readOnly={roomFromLink}
                 />
               </div>
-              
+
               {error && (
                 <div className="text-red-400 text-sm text-center">{error}</div>
               )}
-              
+
               <button
                 type="submit"
                 disabled={loading || !connected}

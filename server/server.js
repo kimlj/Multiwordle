@@ -240,7 +240,25 @@ io.on('connection', (socket) => {
     
     console.log(`Room ${room.roomCode} created by ${playerName}`);
   });
-  
+
+  // Get room info (for share links)
+  socket.on('getRoomInfo', ({ roomCode }, callback) => {
+    const room = gameManager.getRoom(roomCode);
+
+    if (!room) {
+      callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    const host = room.players.get(room.hostId);
+    callback({
+      success: true,
+      hostName: host?.name || 'Unknown',
+      playerCount: room.players.size,
+      state: room.state
+    });
+  });
+
   // Join an existing room
   socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
     const room = gameManager.getRoom(roomCode);
