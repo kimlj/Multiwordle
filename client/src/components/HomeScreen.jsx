@@ -3,7 +3,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../lib/store';
 
 export default function HomeScreen() {
-  const [view, setView] = useState('home'); // home, create, join
+  const [view, setView] = useState('home'); // home, create, join, joining
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [roomFromLink, setRoomFromLink] = useState(false); // Track if room code came from URL
@@ -17,6 +17,30 @@ export default function HomeScreen() {
 
   const { createRoom, joinRoom, socket } = useSocket();
   const { connected } = useGameStore();
+
+  // Generate random player name
+  const generateRandomName = () => {
+    const adjectives = ['Swift', 'Clever', 'Bold', 'Lucky', 'Quick', 'Sharp', 'Bright', 'Cool'];
+    const nouns = ['Fox', 'Wolf', 'Bear', 'Hawk', 'Lion', 'Tiger', 'Eagle', 'Shark'];
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    const num = Math.floor(Math.random() * 100);
+    return `${adj}${noun}${num}`;
+  };
+
+  // Auto-join room from URL
+  const autoJoinRoom = async (code) => {
+    setView('joining');
+    const randomName = generateRandomName();
+    try {
+      await joinRoom(code, randomName);
+      // Success - joinRoom will update the store and App.jsx will show LobbyScreen
+    } catch (err) {
+      setError(err.message || 'Room not found');
+      setRoomFromLink(false);
+      setView('home');
+    }
+  };
 
   // Check URL for room code on load
   useEffect(() => {
@@ -36,24 +60,17 @@ export default function HomeScreen() {
       if (code.length === 6) {
         setRoomCode(code);
         setRoomFromLink(true);
-        setView('join');
       }
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  // Fetch room info when we have a room code from link
+  // Auto-join when we have a room code from link and are connected
   useEffect(() => {
     if (roomFromLink && roomCode && roomCode.length === 6 && socket && connected) {
-      socket.emit('getRoomInfo', { roomCode }, (response) => {
-        if (response.success) {
-          setHostName(response.hostName);
-          setError(''); // Clear any previous error
-        } else {
-          setError(response.error || 'Room not found');
-        }
-      });
+      // Auto-join with random name
+      autoJoinRoom(roomCode);
     }
   }, [roomFromLink, roomCode, socket, connected]);
 
@@ -95,6 +112,22 @@ export default function HomeScreen() {
     setLoading(false);
   };
 
+  // Show loading screen while auto-joining
+  if (view === 'joining') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="text-center">
+          <h1 className="font-display text-4xl font-bold mb-4">Joining Game...</h1>
+          <div className="animate-spin w-8 h-8 border-4 border-wordle-green border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-white/60">Room: {roomCode}</p>
+          {error && (
+            <div className="mt-4 text-red-400">{error}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (view === 'create') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -108,7 +141,7 @@ export default function HomeScreen() {
             </svg>
             Back
           </button>
-          
+
           <div className="glass rounded-2xl p-8">
             <h2 className="font-display text-3xl font-bold mb-6">Create Game</h2>
             
