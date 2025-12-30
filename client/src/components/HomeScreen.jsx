@@ -21,10 +21,18 @@ export default function HomeScreen() {
   // Check URL for room code on load
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const roomFromUrl = params.get('room');
+    let roomFromUrl = params.get('room');
+
+    // Also check hash in case URL got mangled
+    if (!roomFromUrl && window.location.hash) {
+      const hashMatch = window.location.hash.match(/room=([A-Za-z0-9]+)/);
+      if (hashMatch) roomFromUrl = hashMatch[1];
+    }
+
     if (roomFromUrl) {
       // Clean the room code - remove any non-alphanumeric characters and uppercase
-      const code = roomFromUrl.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+      const code = roomFromUrl.trim().replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+      console.log('Room code from URL:', roomFromUrl, '-> cleaned:', code);
       if (code.length === 6) {
         setRoomCode(code);
         setRoomFromLink(true);

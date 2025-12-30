@@ -37,10 +37,34 @@ export default function LobbyScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShareLink = () => {
-    const shareUrl = `${window.location.origin}?room=${roomCode}`;
-    navigator.clipboard.writeText(shareUrl);
-    showToast('Link copied! Share it with friends');
+  const handleShareLink = async () => {
+    const shareUrl = `${window.location.origin}/?room=${roomCode}`;
+
+    // Try native share API first (better on mobile)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Wordle game!',
+          text: `Join my Wordle Royale game! Room code: ${roomCode}`,
+          url: shareUrl
+        });
+        return;
+      } catch (err) {
+        // User cancelled or share failed, fall back to clipboard
+        if (err.name !== 'AbortError') {
+          console.log('Share failed, using clipboard:', err);
+        }
+      }
+    }
+
+    // Fallback to clipboard
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast('Link copied! Share it with friends');
+    } catch (err) {
+      // Clipboard failed, show manual copy
+      showToast(`Share this link: ${shareUrl}`);
+    }
   };
 
   const handleNameEdit = () => {
