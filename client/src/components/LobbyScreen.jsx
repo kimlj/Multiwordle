@@ -3,7 +3,7 @@ import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 
 export default function LobbyScreen() {
-  const { gameState, playerId, roomCode, isHost, showToast } = useGameStore();
+  const { gameState, playerId, roomCode, isHost, showToast, resetGame } = useGameStore();
   const { toggleReady, updateSettings, startGame, updateName } = useSocket();
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
@@ -83,6 +83,17 @@ export default function LobbyScreen() {
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
+        {/* Leave Room Button */}
+        <button
+          onClick={() => resetGame()}
+          className="mb-4 text-white/60 hover:text-white flex items-center gap-2 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Leave Room
+        </button>
+
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">Game Lobby</h1>
@@ -356,21 +367,72 @@ export default function LobbyScreen() {
         {/* Scoring Info */}
         <div className="mt-8 glass rounded-2xl p-6">
           <h2 className="font-bold text-lg mb-4 text-center">Scoring System</h2>
-          <div className="grid md:grid-cols-3 gap-4 text-center">
-            <div className="p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-2">🎯</div>
-              <div className="font-bold text-wordle-green">1000 pts</div>
-              <div className="text-white/40 text-sm">Base for solving</div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Left column - Base & Guess Bonus */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-white/60">Base Score (solving)</span>
+                <span className="font-bold text-wordle-green">+1000</span>
+              </div>
+              <div className="border-t border-white/10 pt-3">
+                <div className="text-white/60 mb-2">Guess Bonus:</div>
+                <div className="text-sm text-white/40 space-y-1">
+                  <div className="flex justify-between">
+                    <span>1 guess (genius!)</span>
+                    <span className="text-wordle-green">+900</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>2 guesses</span>
+                    <span className="text-wordle-green">+750</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>3 guesses</span>
+                    <span className="text-wordle-green">+600</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>4 guesses</span>
+                    <span className="text-wordle-green">+450</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>5 guesses</span>
+                    <span className="text-wordle-green">+300</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>6 guesses</span>
+                    <span className="text-wordle-green">+150</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-2">⚡</div>
-              <div className="font-bold text-wordle-yellow">+150 pts</div>
-              <div className="text-white/40 text-sm">Per guess saved</div>
-            </div>
-            <div className="p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-2">⏱️</div>
-              <div className="font-bold text-blue-400">+Time Bonus</div>
-              <div className="text-white/40 text-sm">Faster = more points</div>
+
+            {/* Right column - Time Bonus */}
+            <div className="space-y-4">
+              <div className="text-white/60">Time Bonus (up to 500 pts):</div>
+              <div className="text-sm text-white/40 space-y-1">
+                <p className="text-white/60">= seconds left × (500 ÷ round time)</p>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between">
+                    <span>60s round</span>
+                    <span className="text-blue-400">8.3/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>120s round</span>
+                    <span className="text-blue-400">4.2/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>180s round</span>
+                    <span className="text-blue-400">2.8/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>300s round</span>
+                    <span className="text-blue-400">1.7/sec</span>
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-white/10 pt-3 text-sm">
+                <div className="text-white/40">Example: 180s round, 3 guesses, 90s left</div>
+                <div className="text-white/60">= 1000 + 600 + (90 × 2.8) = <span className="text-wordle-yellow font-bold">1852 pts</span></div>
+              </div>
             </div>
           </div>
         </div>
