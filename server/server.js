@@ -13,15 +13,28 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = createServer(app);
 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: process.env.NODE_ENV === 'production' ? ALLOWED_ORIGINS : '*',
     methods: ["GET", "POST"]
   }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' ? ALLOWED_ORIGINS : '*'
+}));
 app.use(express.json());
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Only serve static files if they exist (for combined deployment)
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 const gameManager = new GameManager();

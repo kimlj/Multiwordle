@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useGameStore } from '../lib/store';
 
-const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:3001';
+const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 
 let socket = null;
 
