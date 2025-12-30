@@ -9,10 +9,8 @@ export default function WordleGrid({
   playerName = '',
   solved = false,
   score = 0,
-  guessCount = 0,
-  lastGuessColors = null,
-  showingOther = false,
-  guessResults = [] // Array of status arrays for other players' colored grids
+  guessResults = [], // Array of status arrays for other players' colored grids
+  compact = false // Compact mode for grid layout
 }) {
   const rows = [];
 
@@ -41,14 +39,19 @@ export default function WordleGrid({
         letter = currentInput[j];
       }
 
+      // Cell sizes based on compact mode
+      const cellSize = compact
+        ? 'w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base'
+        : 'w-8 h-8 sm:w-10 sm:h-10 text-base sm:text-lg';
+
       cells.push(
         <div
           key={j}
           className={`
-            ${showingOther && !isCurrentPlayer ? 'w-8 h-8 md:w-10 md:h-10' : 'w-12 h-12 md:w-14 md:h-14'}
+            ${cellSize}
             flex items-center justify-center
-            text-xl md:text-2xl font-bold uppercase
-            border-2 transition-all duration-200
+            font-bold uppercase
+            border transition-all duration-200
             ${letter && !status ? 'border-white/50 tile-pop' : 'border-white/20'}
             ${status === 'correct' ? 'status-correct' : ''}
             ${status === 'present' ? 'status-present' : ''}
@@ -66,7 +69,7 @@ export default function WordleGrid({
     }
 
     rows.push(
-      <div key={i} className="flex gap-1 justify-center">
+      <div key={i} className="flex gap-0.5 justify-center">
         {cells}
       </div>
     );
@@ -74,30 +77,30 @@ export default function WordleGrid({
 
   return (
     <div className={`
-      p-4 rounded-2xl transition-all
-      ${isCurrentPlayer ? 'glass player-you' : 'bg-white/5'}
+      p-2 sm:p-3 rounded-xl transition-all
+      ${isCurrentPlayer ? 'glass player-you ring-2 ring-wordle-green/50' : 'bg-white/5'}
       ${solved ? 'player-solved' : ''}
     `}>
       {/* Player header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={`font-bold ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/80'}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-xs sm:text-sm font-bold truncate max-w-[80px] sm:max-w-[120px] ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/80'}`}>
             {playerName}
             {isCurrentPlayer && ' (You)'}
           </span>
           {solved && (
-            <span className="text-xs px-2 py-0.5 bg-wordle-green/30 text-wordle-green rounded-full">
-              ✓ Solved
+            <span className="text-[10px] px-1.5 py-0.5 bg-wordle-green/30 text-wordle-green rounded-full whitespace-nowrap">
+              Solved
             </span>
           )}
         </div>
         {score > 0 && (
-          <span className="text-wordle-green font-bold">+{score}</span>
+          <span className="text-wordle-green font-bold text-xs sm:text-sm">+{score}</span>
         )}
       </div>
-      
+
       {/* Grid */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-0.5">
         {rows}
       </div>
     </div>
