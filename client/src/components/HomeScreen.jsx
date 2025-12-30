@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../lib/store';
 
@@ -15,6 +15,18 @@ export default function HomeScreen() {
 
   const { createRoom, joinRoom } = useSocket();
   const { connected } = useGameStore();
+
+  // Check URL for room code on load
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomFromUrl = params.get('room');
+    if (roomFromUrl) {
+      setRoomCode(roomFromUrl.toUpperCase());
+      setView('join');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleCreate = async (e) => {
     e.preventDefault();

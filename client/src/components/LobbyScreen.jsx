@@ -34,6 +34,12 @@ export default function LobbyScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleShareLink = () => {
+    const shareUrl = `${window.location.origin}?room=${roomCode}`;
+    navigator.clipboard.writeText(shareUrl);
+    showToast('Link copied! Share it with friends');
+  };
+
   const handleNameEdit = () => {
     if (newName.trim()) {
       updateName(newName.trim());
@@ -97,7 +103,7 @@ export default function LobbyScreen() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="font-display text-4xl font-bold mb-2">Game Lobby</h1>
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             <span className="text-white/60">Room Code:</span>
             <button
               onClick={handleCopyCode}
@@ -109,6 +115,15 @@ export default function LobbyScreen() {
               </svg>
             </button>
             {copied && <span className="text-wordle-green text-sm">Copied!</span>}
+            <button
+              onClick={handleShareLink}
+              className="flex items-center gap-2 px-4 py-2 bg-wordle-green/20 text-wordle-green rounded-lg hover:bg-wordle-green/30 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              Share Link
+            </button>
           </div>
         </div>
 
