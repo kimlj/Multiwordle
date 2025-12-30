@@ -145,12 +145,14 @@ export default function GameScreen({ showResults = false }) {
         style={{ position: 'fixed', top: '-100px' }}
         onChange={handleInputChange}
         onKeyDown={(e) => {
+          // Only handle Backspace here - Enter is handled by window listener
+          // to prevent double submission
           if (e.key === 'Backspace') {
             e.preventDefault();
             removeLetter();
           } else if (e.key === 'Enter') {
             e.preventDefault();
-            handleSubmit();
+            // Don't call handleSubmit here - window listener handles it
           }
         }}
       />
