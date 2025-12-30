@@ -47,6 +47,9 @@ const roomTimers = new Map();
 const disconnectedPlayers = new Map();
 const RECONNECT_WINDOW_MS = 60000; // 60 seconds to reconnect
 
+// Track rooms scheduled for deletion (roomCode -> timeoutId)
+const roomDeletionTimers = new Map();
+
 function clearRoomTimers(roomCode) {
   const timers = roomTimers.get(roomCode);
   if (timers) {
@@ -266,22 +269,30 @@ io.on('connection', (socket) => {
   // Join an existing room
   socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
     const room = gameManager.getRoom(roomCode);
-    
+
     if (!room) {
       callback({ success: false, error: 'Room not found' });
       return;
     }
-    
+
     if (room.state !== 'lobby') {
       callback({ success: false, error: 'Game already in progress' });
       return;
     }
-    
+
     if (!room.addPlayer(socket.id, playerName)) {
       callback({ success: false, error: 'Could not join room' });
       return;
     }
-    
+
+    // Cancel any pending room deletion
+    const deletionTimer = roomDeletionTimers.get(roomCode);
+    if (deletionTimer) {
+      clearTimeout(deletionTimer);
+      roomDeletionTimers.delete(roomCode);
+      console.log(`Cancelled deletion for room ${roomCode} - player joined`);
+    }
+
     playerRooms.set(socket.id, roomCode);
     socket.join(roomCode);
     
@@ -311,6 +322,14 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Cancel any pending room deletion
+    const deletionTimer = roomDeletionTimers.get(roomCode);
+    if (deletionTimer) {
+      clearTimeout(deletionTimer);
+      roomDeletionTimers.delete(roomCode);
+      console.log(`Cancelled deletion for room ${roomCode} - player rejoined`);
+    }
+
     const disconnectKey = `${playerName}:${roomCode}`;
     const disconnectedPlayer = disconnectedPlayers.get(disconnectKey);
 
@@ -318,6 +337,11 @@ io.on('connection', (socket) => {
     if (disconnectedPlayer && Date.now() - disconnectedPlayer.disconnectTime < RECONNECT_WINDOW_MS) {
       // Restore the player with their data
       const playerData = disconnectedPlayer.playerData;
+
+      // Restore host status if they were the host
+      if (disconnectedPlayer.wasHost) {
+        room.hostId = socket.id;
+      }
 
       // Add player back to room with their existing data
       room.players.set(socket.id, {
@@ -688,7 +712,8 @@ io.on('connection', (socket) => {
           disconnectedPlayers.set(disconnectKey, {
             playerId: socket.id,
             disconnectTime: Date.now(),
-            playerData: { ...player }
+            playerData: { ...player },
+            wasHost: room.hostId === socket.id
           });
 
           // Clean up old disconnected players periodically
@@ -703,15 +728,27 @@ io.on('connection', (socket) => {
         const remaining = room.removePlayer(socket.id);
 
         if (remaining === 0) {
-          clearRoomTimers(roomCode);
-          gameManager.deleteRoom(roomCode);
-          // Also clean up any disconnected players for this room
-          for (const [key] of disconnectedPlayers) {
-            if (key.endsWith(`:${roomCode}`)) {
-              disconnectedPlayers.delete(key);
+          // Don't delete immediately - schedule deletion after timeout
+          // This allows the host to reconnect after sharing link on mobile
+          console.log(`Room ${roomCode} empty, scheduling deletion in ${RECONNECT_WINDOW_MS/1000}s`);
+
+          const deletionTimer = setTimeout(() => {
+            const roomStillExists = gameManager.getRoom(roomCode);
+            if (roomStillExists && roomStillExists.players.size === 0) {
+              clearRoomTimers(roomCode);
+              gameManager.deleteRoom(roomCode);
+              roomDeletionTimers.delete(roomCode);
+              // Clean up disconnected players for this room
+              for (const [key] of disconnectedPlayers) {
+                if (key.endsWith(`:${roomCode}`)) {
+                  disconnectedPlayers.delete(key);
+                }
+              }
+              console.log(`Room ${roomCode} deleted (empty after timeout)`);
             }
-          }
-          console.log(`Room ${roomCode} deleted (empty)`);
+          }, RECONNECT_WINDOW_MS);
+
+          roomDeletionTimers.set(roomCode, deletionTimer);
         } else {
           io.to(roomCode).emit('playerLeft', {
             playerId: socket.id,
