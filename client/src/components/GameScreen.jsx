@@ -101,11 +101,11 @@ export default function GameScreen({ showResults = false }) {
   const totalPlayers = allPlayers.length;
 
   // Determine grid columns based on player count
+  // 6 players = 3 cols x 2 rows, 7+ scrolls below
   const getGridCols = () => {
-    if (totalPlayers <= 2) return 'grid-cols-2';
-    if (totalPlayers <= 4) return 'grid-cols-2 sm:grid-cols-2';
-    if (totalPlayers <= 6) return 'grid-cols-2 sm:grid-cols-3';
-    return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4';
+    if (totalPlayers === 1) return 'grid-cols-1';
+    if (totalPlayers === 2) return 'grid-cols-2';
+    return 'grid-cols-3'; // 3+ players always 3 columns
   };
 
   const formatTime = (ms) => {
@@ -217,12 +217,12 @@ export default function GameScreen({ showResults = false }) {
         </div>
       )}
 
-      {/* Player Grids - All in one responsive grid */}
+      {/* Player Grids - Compact grid, 6 fit in viewport */}
       <div
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto flex items-start justify-center"
         onClick={handleGridTap}
       >
-        <div className={`grid ${getGridCols()} gap-2 sm:gap-3 max-w-4xl mx-auto`}>
+        <div className={`grid ${getGridCols()} gap-3 sm:gap-4`}>
           {allPlayers.map((player) => {
             const isMe = player.id === playerId;
             return (
@@ -236,7 +236,6 @@ export default function GameScreen({ showResults = false }) {
                 solved={isMe ? playerState?.solved : player.solved}
                 score={isMe ? playerState?.roundScore : player.roundScore}
                 guessResults={isMe ? [] : (player.guessResults || [])}
-                compact={totalPlayers > 2}
               />
             );
           })}
