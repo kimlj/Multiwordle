@@ -101,17 +101,33 @@ export default function HomeScreen() {
                       {n}
                     </button>
                   ))}
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={![1, 3, 5, 7].includes(settings.rounds) ? settings.rounds : ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setSettings({ ...settings, rounds: Math.min(99, Math.max(1, val)) });
+                    }}
+                    placeholder="#"
+                    className={`w-16 py-3 rounded-lg font-bold text-center transition-all ${
+                      ![1, 3, 5, 7].includes(settings.rounds)
+                        ? 'bg-wordle-green text-white'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  />
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm text-white/60 mb-2">Time Per Round</label>
                 <div className="flex gap-2">
                   {[
-                    { label: '1 min', value: 60 },
-                    { label: '2 min', value: 120 },
-                    { label: '3 min', value: 180 },
-                    { label: '5 min', value: 300 }
+                    { label: '1m', value: 60 },
+                    { label: '2m', value: 120 },
+                    { label: '3m', value: 180 },
+                    { label: '5m', value: 300 }
                   ].map((opt) => (
                     <button
                       key={opt.value}
@@ -126,6 +142,26 @@ export default function HomeScreen() {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-white/40 text-sm">Custom:</span>
+                  <input
+                    type="number"
+                    min="10"
+                    max="3600"
+                    value={![60, 120, 180, 300].includes(settings.roundTimeSeconds) ? settings.roundTimeSeconds : ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 60;
+                      setSettings({ ...settings, roundTimeSeconds: Math.min(3600, Math.max(10, val)) });
+                    }}
+                    placeholder="seconds"
+                    className={`w-24 py-2 rounded-lg font-bold text-center text-sm transition-all ${
+                      ![60, 120, 180, 300].includes(settings.roundTimeSeconds)
+                        ? 'bg-wordle-green text-white'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  />
+                  <span className="text-white/40 text-sm">sec</span>
                 </div>
               </div>
               
@@ -296,29 +332,32 @@ export default function HomeScreen() {
               </div>
             </div>
             <div className="border-t border-white/10 pt-2">
-              <div className="text-white/60 mb-1">Time Bonus:</div>
+              <div className="text-white/60 mb-1">Time Bonus (up to 500 pts):</div>
               <div className="text-xs text-white/40 space-y-1">
-                <p className="text-white/60">= seconds left × pts/sec</p>
-                <div className="flex justify-between">
-                  <span>1 min round</span>
-                  <span className="text-blue-400">8.3 pts/sec</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>2 min round</span>
-                  <span className="text-blue-400">4.2 pts/sec</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>3 min round</span>
-                  <span className="text-blue-400">2.8 pts/sec</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>5 min round</span>
-                  <span className="text-blue-400">1.7 pts/sec</span>
+                <p className="text-white/60">= seconds left × (500 ÷ round time)</p>
+                <p className="text-white/40">pts/sec = 500 ÷ total seconds</p>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex justify-between">
+                    <span>60s round</span>
+                    <span className="text-blue-400">8.3/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>120s round</span>
+                    <span className="text-blue-400">4.2/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>180s round</span>
+                    <span className="text-blue-400">2.8/sec</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>300s round</span>
+                    <span className="text-blue-400">1.7/sec</span>
+                  </div>
                 </div>
               </div>
             </div>
             <div className="border-t border-white/10 pt-2 text-xs">
-              <div className="text-white/40">Example: 3 min round, solve in 3 guesses with 90s left</div>
+              <div className="text-white/40">Example: 180s round, 3 guesses, 90s left</div>
               <div className="text-white/60">= 1000 + 600 + (90 × 2.8) = <span className="text-wordle-yellow font-bold">1852 pts</span></div>
             </div>
           </div>

@@ -202,6 +202,22 @@ export default function LobbyScreen() {
                         {n}
                       </button>
                     ))}
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={![1, 3, 5, 7].includes(gameState.settings.rounds) ? gameState.settings.rounds : ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        updateSettings({ rounds: Math.min(99, Math.max(1, val)) });
+                      }}
+                      placeholder="#"
+                      className={`w-14 py-2 rounded-lg font-bold text-center transition-all ${
+                        ![1, 3, 5, 7].includes(gameState.settings.rounds)
+                          ? 'bg-wordle-green text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}
+                    />
                   </div>
                 </div>
 
@@ -227,6 +243,26 @@ export default function LobbyScreen() {
                         {opt.label}
                       </button>
                     ))}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-white/40 text-sm">Custom:</span>
+                    <input
+                      type="number"
+                      min="10"
+                      max="3600"
+                      value={![60, 120, 180, 300].includes(gameState.settings.roundTimeSeconds) ? gameState.settings.roundTimeSeconds : ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 60;
+                        updateSettings({ roundTimeSeconds: Math.min(3600, Math.max(10, val)) });
+                      }}
+                      placeholder="seconds"
+                      className={`w-20 py-1 rounded-lg font-bold text-center text-sm transition-all ${
+                        ![60, 120, 180, 300].includes(gameState.settings.roundTimeSeconds)
+                          ? 'bg-wordle-green text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}
+                    />
+                    <span className="text-white/40 text-sm">sec</span>
                   </div>
                 </div>
               </div>
