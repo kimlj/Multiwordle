@@ -269,106 +269,116 @@ export default function GameScreen({ showResults = false }) {
       )}
 
       {/* Round End Modal */}
-      {showResults && gameState.state === 'roundEnd' && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="glass rounded-2xl p-4 sm:p-6 max-w-2xl w-full animate-bounce-in my-4">
-            <h2 className="font-display text-2xl sm:text-3xl font-bold text-center mb-2">Round Complete!</h2>
-            <p className="text-center text-white/60 mb-4">
-              The word was: <span className="text-wordle-green font-bold text-xl sm:text-2xl">{roundEndData?.word || playerState?.targetWord}</span>
-            </p>
+      {showResults && gameState.state === 'roundEnd' && (() => {
+        const sortedByRound = [...players].sort((a, b) => b.roundScore - a.roundScore);
+        const sortedByTotal = [...players].sort((a, b) => b.totalScore - a.totalScore);
+        const roundWinner = sortedByRound[0];
+        const winnerStats = roundEndData?.playerStats?.[roundWinner?.id];
 
-            {/* Next round countdown */}
-            {nextRoundCountdown !== null && gameState.currentRound < gameState.totalRounds && (
-              <div className="text-center mb-4">
-                <span className="text-white/60">Next round in </span>
-                <span className="text-wordle-yellow font-bold text-xl">{nextRoundCountdown}</span>
-              </div>
-            )}
+        return (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="glass rounded-2xl p-4 sm:p-6 max-w-2xl w-full animate-bounce-in my-4">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-center mb-1">Round {gameState.currentRound} Complete!</h2>
+              <p className="text-center text-white/60 mb-4">
+                The word was: <span className="text-wordle-green font-bold text-xl sm:text-2xl">{roundEndData?.word || playerState?.targetWord}</span>
+              </p>
 
-            {/* Round Scores with breakdown */}
-            <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6 max-h-[50vh] overflow-y-auto">
-              {players
-                .sort((a, b) => b.roundScore - a.roundScore)
-                .map((player, idx) => {
-                  const stats = roundEndData?.playerStats?.[player.id];
-                  return (
-                    <div
-                      key={player.id}
-                      className={`p-3 sm:p-4 rounded-lg ${
-                        player.id === playerId ? 'bg-wordle-green/20 border border-wordle-green/50' : 'bg-white/5'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-lg sm:text-2xl">
-                            {idx === 0 && player.roundScore > 0 ? '🥇' : idx === 1 && player.roundScore > 0 ? '🥈' : idx === 2 && player.roundScore > 0 ? '🥉' : ''}
-                          </span>
-                          <div className="font-bold text-sm sm:text-lg">{player.name}</div>
-                        </div>
-                        <div className={`text-lg sm:text-2xl font-bold ${player.roundScore > 0 ? 'text-wordle-green' : 'text-white/40'}`}>
-                          +{player.roundScore}
-                        </div>
-                      </div>
-
-                      {stats?.solved ? (
-                        <div className="grid grid-cols-3 gap-1 sm:gap-2 text-xs sm:text-sm">
-                          <div className="bg-black/20 rounded p-1.5 sm:p-2 text-center">
-                            <div className="text-white/40 text-[10px] sm:text-xs">Guesses</div>
-                            <div className="font-bold">{stats.guesses}/6</div>
-                            <div className="text-wordle-green text-[10px] sm:text-xs">+{stats.guessBonus}</div>
-                          </div>
-                          <div className="bg-black/20 rounded p-1.5 sm:p-2 text-center">
-                            <div className="text-white/40 text-[10px] sm:text-xs">Time</div>
-                            <div className="font-bold">{Math.floor(stats.timeSeconds / 60)}:{(stats.timeSeconds % 60).toString().padStart(2, '0')}</div>
-                            <div className="text-blue-400 text-[10px] sm:text-xs">+{stats.timeBonus}</div>
-                          </div>
-                          <div className="bg-black/20 rounded p-1.5 sm:p-2 text-center">
-                            <div className="text-white/40 text-[10px] sm:text-xs">Base</div>
-                            <div className="font-bold">Solved</div>
-                            <div className="text-wordle-yellow text-[10px] sm:text-xs">+{stats.baseScore}</div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-white/40 text-xs sm:text-sm">
-                          Did not solve ({stats?.guesses || player.guessCount}/6 guesses used)
-                        </div>
-                      )}
-
-                      <div className="text-right text-[10px] sm:text-xs text-white/40 mt-1 sm:mt-2">
-                        Total: {player.totalScore}
-                      </div>
+              {/* Round Winner */}
+              {roundWinner && roundWinner.roundScore > 0 && (
+                <div className="bg-wordle-yellow/20 border border-wordle-yellow/50 rounded-xl p-3 sm:p-4 mb-4">
+                  <div className="text-center mb-2">
+                    <span className="text-2xl">🏆</span>
+                    <span className="text-wordle-yellow font-bold text-lg sm:text-xl ml-2">Round Winner</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-lg">{roundWinner.name}</span>
+                    <span className="text-wordle-green font-bold text-xl">+{roundWinner.roundScore}</span>
+                  </div>
+                  {winnerStats?.solved && (
+                    <div className="text-xs sm:text-sm text-white/60 mt-1">
+                      Solved in {winnerStats.guesses} guess{winnerStats.guesses !== 1 ? 'es' : ''} •
+                      {Math.floor(winnerStats.timeSeconds / 60)}:{(winnerStats.timeSeconds % 60).toString().padStart(2, '0')} •
+                      <span className="text-wordle-yellow"> +{winnerStats.baseScore}</span> base
+                      <span className="text-wordle-green"> +{winnerStats.guessBonus}</span> guess
+                      <span className="text-blue-400"> +{winnerStats.timeBonus}</span> time
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              )}
+
+              {/* Next round countdown */}
+              {nextRoundCountdown !== null && gameState.currentRound < gameState.totalRounds && (
+                <div className="text-center mb-3">
+                  <span className="text-white/60">Next round in </span>
+                  <span className="text-wordle-yellow font-bold text-xl">{nextRoundCountdown}</span>
+                </div>
+              )}
+
+              {/* Current Standings */}
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-white/60 mb-2 text-center">Current Standings</h3>
+                <div className="space-y-1.5 max-h-[35vh] overflow-y-auto">
+                  {sortedByTotal.map((player, idx) => {
+                    const stats = roundEndData?.playerStats?.[player.id];
+                    const isMe = player.id === playerId;
+                    return (
+                      <div
+                        key={player.id}
+                        className={`flex items-center justify-between p-2 sm:p-3 rounded-lg ${
+                          isMe ? 'bg-wordle-green/20 border border-wordle-green/50' : 'bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 text-center font-bold text-white/40">
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
+                          </span>
+                          <span className={`font-medium text-sm ${isMe ? 'text-wordle-green' : ''}`}>
+                            {player.name}{isMe ? ' (You)' : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs ${player.roundScore > 0 ? 'text-wordle-green' : 'text-white/30'}`}>
+                            {player.roundScore > 0 ? `+${player.roundScore}` : (stats?.solved === false ? 'Failed' : '+0')}
+                          </span>
+                          <span className="font-bold text-sm sm:text-base">{player.totalScore}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Game over - show final results */}
+              {gameState.currentRound >= gameState.totalRounds && (
+                <div className="text-center mb-4 pt-2 border-t border-white/10">
+                  <div className="text-lg sm:text-xl font-bold text-wordle-yellow mb-2">🎉 Game Over!</div>
+                  <div className="text-white/60 mb-3">
+                    Winner: <span className="text-wordle-green font-bold">{sortedByTotal[0]?.name}</span> with {sortedByTotal[0]?.totalScore} points!
+                  </div>
+                  <button
+                    onClick={() => endGame()}
+                    className="btn-primary"
+                  >
+                    Back to Lobby
+                  </button>
+                </div>
+              )}
+
+              {/* Host controls to end early */}
+              {isHost && gameState.currentRound < gameState.totalRounds && (
+                <div className="text-center">
+                  <button
+                    onClick={() => endGame()}
+                    className="text-xs sm:text-sm text-white/40 hover:text-white/60 underline"
+                  >
+                    End Game Early
+                  </button>
+                </div>
+              )}
             </div>
-
-            {/* Game over - show final results */}
-            {gameState.currentRound >= gameState.totalRounds && (
-              <div className="text-center mb-4">
-                <div className="text-lg sm:text-xl font-bold text-wordle-yellow mb-2">Game Over!</div>
-                <button
-                  onClick={() => endGame()}
-                  className="btn-primary"
-                >
-                  Back to Lobby
-                </button>
-              </div>
-            )}
-
-            {/* Host controls to end early */}
-            {isHost && gameState.currentRound < gameState.totalRounds && (
-              <div className="text-center">
-                <button
-                  onClick={() => endGame()}
-                  className="text-xs sm:text-sm text-white/40 hover:text-white/60 underline"
-                >
-                  End Game Early
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
