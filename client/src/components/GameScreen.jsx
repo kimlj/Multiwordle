@@ -231,7 +231,7 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 pb-16 sm:pb-4">
           <div className="flex flex-col gap-1.5 items-center">
             {KEYBOARD_ROWS.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1.5 justify-center">
