@@ -90,6 +90,16 @@ export default function GameScreen({ showResults = false }) {
     }
   }, [playerState]);
 
+  // Auto-focus input when round starts (opens native keyboard on mobile)
+  useEffect(() => {
+    if (gameState?.state === 'playing' && inputRef.current && !playerState?.solved) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [gameState?.state, playerState?.solved]);
+
   if (!gameState) return null;
 
   const players = Object.values(gameState.players);
@@ -222,7 +232,7 @@ export default function GameScreen({ showResults = false }) {
         className="flex-1 overflow-auto flex items-start justify-center"
         onClick={handleGridTap}
       >
-        <div className={`grid ${getGridCols()} gap-3 sm:gap-4`}>
+        <div className={`grid ${getGridCols()} gap-3 sm:gap-4 max-w-[95%]`}>
           {allPlayers.map((player) => {
             const isMe = player.id === playerId;
             return (
