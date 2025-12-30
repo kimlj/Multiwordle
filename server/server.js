@@ -45,7 +45,7 @@ const roomTimers = new Map();
 
 // Track disconnected players for reconnection (playerName:roomCode -> { playerId, disconnectTime, playerData })
 const disconnectedPlayers = new Map();
-const RECONNECT_WINDOW_MS = 60000; // 60 seconds to reconnect
+const RECONNECT_WINDOW_MS = 300000; // 5 minutes to reconnect
 
 // Track rooms scheduled for deletion (roomCode -> timeoutId)
 const roomDeletionTimers = new Map();

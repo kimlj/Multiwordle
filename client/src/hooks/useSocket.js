@@ -22,8 +22,8 @@ function getSession() {
     const data = localStorage.getItem(SESSION_KEY);
     if (data) {
       const session = JSON.parse(data);
-      // Session expires after 1 hour
-      if (Date.now() - session.timestamp < 60 * 60 * 1000) {
+      // Session expires after 24 hours
+      if (Date.now() - session.timestamp < 24 * 60 * 60 * 1000) {
         return session;
       }
     }
