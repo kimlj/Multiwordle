@@ -219,16 +219,6 @@ export default function GameScreen({ showResults = false }) {
         </div>
       </div>
 
-      {/* Tap hint for mobile */}
-      {canType && (
-        <div
-          onClick={handleGridTap}
-          className="text-center text-xs text-white/40 mb-2 cursor-pointer sm:hidden"
-        >
-          Tap here to type
-        </div>
-      )}
-
       {/* Player Grids - Compact grid, 6 fit in viewport */}
       <div
         className="flex-1 overflow-auto flex items-start justify-center"
