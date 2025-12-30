@@ -252,6 +252,12 @@ export default function LobbyScreen() {
                       max="3600"
                       value={![60, 120, 180, 300].includes(gameState.settings.roundTimeSeconds) ? gameState.settings.roundTimeSeconds : ''}
                       onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val)) {
+                          updateSettings({ roundTimeSeconds: val });
+                        }
+                      }}
+                      onBlur={(e) => {
                         const val = parseInt(e.target.value) || 60;
                         updateSettings({ roundTimeSeconds: Math.min(3600, Math.max(10, val)) });
                       }}

@@ -151,6 +151,12 @@ export default function HomeScreen() {
                     max="3600"
                     value={![60, 120, 180, 300].includes(settings.roundTimeSeconds) ? settings.roundTimeSeconds : ''}
                     onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val)) {
+                        setSettings({ ...settings, roundTimeSeconds: val });
+                      }
+                    }}
+                    onBlur={(e) => {
                       const val = parseInt(e.target.value) || 60;
                       setSettings({ ...settings, roundTimeSeconds: Math.min(3600, Math.max(10, val)) });
                     }}
