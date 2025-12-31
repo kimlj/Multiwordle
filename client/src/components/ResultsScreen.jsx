@@ -4,7 +4,7 @@ import { useSocket } from '../hooks/useSocket';
 
 export default function ResultsScreen() {
   const { gameState, playerId, isHost } = useGameStore();
-  const { playAgain } = useSocket();
+  const { playAgain, leaveRoom } = useSocket();
   const [showConfetti, setShowConfetti] = useState(true);
 
   if (!gameState) return null;
@@ -118,24 +118,18 @@ export default function ResultsScreen() {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-4">
-            {isHost ? (
-              <button
-                onClick={playAgain}
-                className="btn-primary flex-1"
-              >
-                Play Again
-              </button>
-            ) : (
-              <div className="flex-1 text-center text-white/40 py-4">
-                Waiting for host to start new game...
-              </div>
-            )}
+          <div className="flex justify-center gap-4">
             <button
-              onClick={() => window.location.reload()}
-              className="btn-secondary flex-1"
+              onClick={playAgain}
+              className="btn-primary px-8"
             >
-              Leave Game
+              Back to Lobby
+            </button>
+            <button
+              onClick={leaveRoom}
+              className="btn-secondary px-8"
+            >
+              Back to Home
             </button>
           </div>
         </div>

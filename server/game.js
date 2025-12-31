@@ -319,6 +319,7 @@ export class GameRoom {
         solvedInGuesses: player.solvedInGuesses,
         totalScore: player.totalScore,
         roundScore: player.roundScore,
+        returnedToLobby: player.returnedToLobby || false,
         // Send all guess results (colors only, no letters) for other players to see progress
         guessResults: player.results.map(result =>
           result.map(cell => cell.status)

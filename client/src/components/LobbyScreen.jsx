@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 
-export default function LobbyScreen() {
+export default function LobbyScreen({ waitingForOthers = false }) {
   const { gameState, playerId, roomCode, showToast } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
@@ -19,7 +19,12 @@ export default function LobbyScreen() {
 
   const currentPlayer = gameState.players[playerId];
   const players = Object.values(gameState.players);
-  const allReady = players.every(p => p.ready) && players.length >= 1;
+
+  // When waiting for others, only check readiness of returned players
+  const returnedPlayers = waitingForOthers
+    ? players.filter(p => p.returnedToLobby)
+    : players;
+  const allReady = returnedPlayers.every(p => p.ready) && returnedPlayers.length >= 1;
   const numRounds = gameState.settings.rounds;
 
   // Initialize custom words array when rounds change
@@ -113,9 +118,37 @@ export default function LobbyScreen() {
     return mins > 0 ? `${mins} min` : `${secs}s`;
   };
 
+  // Count players who have returned to lobby vs still viewing results
+  const playersReturned = players.filter(p => p.returnedToLobby).length;
+  const playersStillViewing = players.filter(p => !p.returnedToLobby);
+
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
+        {/* Waiting for others banner */}
+        {waitingForOthers && (
+          <div className="mb-6 p-4 bg-wordle-yellow/20 border border-wordle-yellow/40 rounded-xl text-center">
+            <div className="text-wordle-yellow font-bold mb-2">
+              {playersStillViewing.length > 0
+                ? 'Some players still viewing results'
+                : 'All players returned!'}
+            </div>
+            <div className="text-white/60 text-sm">
+              {playersReturned} of {players.length} players returned
+              {playersStillViewing.length > 0 && (
+                <span className="block mt-1">
+                  Still viewing: {playersStillViewing.map(p => p.name).join(', ')}
+                </span>
+              )}
+              {isHost && playersStillViewing.length > 0 && (
+                <span className="block mt-2 text-white/80">
+                  You can start without them - they'll be removed from the room
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Leave Room Button */}
         <button
           onClick={() => leaveRoom()}
@@ -234,16 +267,81 @@ export default function LobbyScreen() {
               ))}
             </div>
             
-            <button
-              onClick={toggleReady}
-              className={`w-full mt-6 py-4 rounded-xl font-bold text-lg transition-all ${
-                currentPlayer?.ready
-                  ? 'bg-white/10 text-white/60 hover:bg-white/20'
-                  : 'bg-wordle-green text-white hover:bg-wordle-green/90'
-              }`}
-            >
-              {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
-            </button>
+            {/* Only show Ready button to non-host players - host is always ready */}
+            {!isHost && (
+              <button
+                onClick={toggleReady}
+                className={`w-full mt-6 py-4 rounded-xl font-bold text-lg transition-all ${
+                  currentPlayer?.ready
+                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
+                    : 'bg-wordle-green text-white hover:bg-wordle-green/90'
+                }`}
+              >
+                {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
+              </button>
+            )}
+
+            {/* Host Start Game Controls - placed after players list */}
+            {isHost && (
+              <div className="mt-6 pt-6 border-t border-white/10">
+                <button
+                  onClick={() => setShowCustomWord(!showCustomWord)}
+                  className="w-full py-3 px-4 bg-white/5 rounded-lg text-left hover:bg-white/10 transition-colors mb-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <span>Set Custom Word</span>
+                    <span className="text-white/40">{showCustomWord ? '▲' : '▼'}</span>
+                  </div>
+                </button>
+
+                {showCustomWord && (
+                  <div className="mb-4 p-4 bg-white/5 rounded-lg">
+                    <p className="text-sm text-white/60 mb-3 text-center">
+                      Set custom words for each round (leave empty for random)
+                    </p>
+                    <div className="space-y-2 mb-3">
+                      {customWords.map((word, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-white/40 text-sm w-20">Round {idx + 1}:</span>
+                          <input
+                            type="text"
+                            value={word}
+                            onChange={(e) => handleCustomWordChange(idx, e.target.value)}
+                            placeholder="WORD"
+                            className={`input-dark flex-1 text-center tracking-widest font-mono text-sm py-2 ${
+                              word.length > 0 && word.length < 5 ? 'border-orange-500' : ''
+                            } ${word.length === 5 ? 'border-wordle-green' : ''}`}
+                            maxLength={5}
+                          />
+                          {word.length === 5 && <span className="text-wordle-green">✓</span>}
+                        </div>
+                      ))}
+                    </div>
+                    {wordError && (
+                      <p className="text-red-400 text-sm mb-2 text-center">{wordError}</p>
+                    )}
+                    <button
+                      onClick={handleStartWithWords}
+                      className="w-full py-2 bg-wordle-yellow text-black rounded-lg font-bold"
+                    >
+                      {hasAnyCustomWord ? 'Start with Custom Words' : 'Start Game'}
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleStartGame}
+                  disabled={!allReady}
+                  className="w-full py-4 bg-wordle-green text-white rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {!allReady
+                    ? 'Waiting for players...'
+                    : waitingForOthers && playersStillViewing.length > 0
+                      ? `Start with ${returnedPlayers.length} player${returnedPlayers.length !== 1 ? 's' : ''}`
+                      : 'Start Game!'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Settings */}
@@ -351,65 +449,6 @@ export default function LobbyScreen() {
                   <span className="text-white/60">Round Time</span>
                   <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
                 </div>
-              </div>
-            )}
-
-            {isHost && (
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <h3 className="font-bold mb-3">Host Controls</h3>
-                
-                <button
-                  onClick={() => setShowCustomWord(!showCustomWord)}
-                  className="w-full py-3 px-4 bg-white/5 rounded-lg text-left hover:bg-white/10 transition-colors mb-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span>Set Custom Word</span>
-                    <span className="text-white/40">{showCustomWord ? '▲' : '▼'}</span>
-                  </div>
-                </button>
-                
-                {showCustomWord && (
-                  <div className="mb-4 p-4 bg-white/5 rounded-lg">
-                    <p className="text-sm text-white/60 mb-3 text-center">
-                      Set custom words for each round (leave empty for random)
-                    </p>
-                    <div className="space-y-2 mb-3">
-                      {customWords.map((word, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="text-white/40 text-sm w-20">Round {idx + 1}:</span>
-                          <input
-                            type="text"
-                            value={word}
-                            onChange={(e) => handleCustomWordChange(idx, e.target.value)}
-                            placeholder="WORD"
-                            className={`input-dark flex-1 text-center tracking-widest font-mono text-sm py-2 ${
-                              word.length > 0 && word.length < 5 ? 'border-orange-500' : ''
-                            } ${word.length === 5 ? 'border-wordle-green' : ''}`}
-                            maxLength={5}
-                          />
-                          {word.length === 5 && <span className="text-wordle-green">✓</span>}
-                        </div>
-                      ))}
-                    </div>
-                    {wordError && (
-                      <p className="text-red-400 text-sm mb-2 text-center">{wordError}</p>
-                    )}
-                    <button
-                      onClick={handleStartWithWords}
-                      className="w-full py-2 bg-wordle-yellow text-black rounded-lg font-bold"
-                    >
-                      {hasAnyCustomWord ? 'Start with Custom Words' : 'Start Game'}
-                    </button>
-                  </div>
-                )}
-                
-                <button
-                  onClick={handleStartGame}
-                  disabled={!allReady}
-                  className="w-full py-4 bg-wordle-green text-white rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {allReady ? 'Start Game!' : 'Waiting for players...'}
-                </button>
               </div>
             )}
 

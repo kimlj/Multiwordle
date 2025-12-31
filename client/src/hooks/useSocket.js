@@ -6,6 +6,7 @@ const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? ''
 const SESSION_KEY = 'wordle_session';
 
 let socket = null;
+let heartbeatInterval = null;
 
 // Save session to localStorage
 function saveSession(roomCode, playerName) {
@@ -57,11 +58,26 @@ export function useSocket() {
     showToast,
     resetForNewRound,
     resetGame,
-    resetKeyboardStatus
+    resetKeyboardStatus,
+    setIsReconnecting
   } = useGameStore();
 
   useEffect(() => {
     if (!socket) {
+      // Check if there's a session to reconnect to
+      const existingSession = getSession();
+      if (existingSession && existingSession.roomCode) {
+        setIsReconnecting(true);
+        // Timeout for reconnection - clear session if it takes too long
+        setTimeout(() => {
+          if (useGameStore.getState().isReconnecting) {
+            console.log('Reconnection timed out, clearing session');
+            clearSession();
+            setIsReconnecting(false);
+          }
+        }, 10000); // 10 second timeout
+      }
+
       socket = io(SOCKET_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true,
@@ -83,6 +99,7 @@ export function useSocket() {
             roomCode: session.roomCode,
             playerName: session.playerName
           }, (response) => {
+            setIsReconnecting(false);
             if (response.success) {
               setPlayerId(response.playerId);
               setRoomCode(response.roomCode);
@@ -96,6 +113,8 @@ export function useSocket() {
               clearSession();
             }
           });
+        } else {
+          setIsReconnecting(false);
         }
       });
 
@@ -146,7 +165,10 @@ export function useSocket() {
       });
 
       socket.on('gameEnd', (results) => {
-        // Results are handled in the component
+        // Update game state to show results screen
+        if (results.gameState) {
+          setGameState(results.gameState);
+        }
       });
 
       socket.on('gameReset', (gameState) => {
@@ -184,10 +206,58 @@ export function useSocket() {
         clearSession();
         useGameStore.getState().resetGame();
       });
+
+      // Start heartbeat to keep connection alive
+      if (!heartbeatInterval) {
+        heartbeatInterval = setInterval(() => {
+          if (socket && socket.connected) {
+            socket.emit('ping');
+          }
+        }, 25000); // Ping every 25 seconds
+      }
+
+      // Handle visibility changes (alt-tab, screen lock, app switch)
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('Page became visible, checking connection...');
+
+          // If socket is disconnected, let socket.io handle reconnection
+          if (socket && !socket.connected) {
+            console.log('Socket disconnected, attempting to reconnect...');
+            socket.connect();
+          } else if (socket && socket.connected) {
+            // Request state sync from server
+            const session = getSession();
+            if (session && session.roomCode) {
+              socket.emit('syncState', { roomCode: session.roomCode }, (response) => {
+                if (response && response.success) {
+                  useGameStore.getState().setGameState(response.gameState);
+                  if (response.playerState) {
+                    useGameStore.getState().setPlayerState(response.playerState);
+                  }
+                }
+              });
+            }
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      // Also handle page focus (some browsers don't fire visibilitychange)
+      const handleFocus = () => {
+        if (socket && !socket.connected) {
+          console.log('Window focused, socket disconnected, reconnecting...');
+          socket.connect();
+        }
+      };
+
+      window.addEventListener('focus', handleFocus);
     }
 
     return () => {
       // Don't disconnect on unmount - keep connection alive
+      // Clean up visibility listeners on unmount (though this rarely happens for App component)
     };
   }, []);
 

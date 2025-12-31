@@ -30,6 +30,7 @@ export default function GameScreen({ showResults = false }) {
   const { submitGuess, forceEndRound, endGame } = useSocket();
   const [showHostMenu, setShowHostMenu] = useState(false);
   const [showOtherPlayers, setShowOtherPlayers] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Close host menu when clicking outside
   useEffect(() => {
@@ -41,6 +42,11 @@ export default function GameScreen({ showResults = false }) {
   }, [showHostMenu]);
 
   const handleSubmit = useCallback(async () => {
+    // Prevent double-submissions
+    if (isSubmitting) {
+      return;
+    }
+
     if (currentInput.length !== 5) {
       showToast('Word must be 5 letters');
       return;
@@ -50,12 +56,15 @@ export default function GameScreen({ showResults = false }) {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await submitGuess(currentInput);
     } catch (err) {
       showToast(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [currentInput, submitGuess, showToast, playerState]);
+  }, [currentInput, submitGuess, showToast, playerState, isSubmitting]);
 
   // Physical keyboard handler for desktop
   useEffect(() => {
@@ -110,7 +119,7 @@ export default function GameScreen({ showResults = false }) {
   const canType = !showResults && !playerState?.solved && playerState?.guesses?.length < 6;
 
   return (
-    <div className="h-screen flex flex-col p-2 sm:p-4 overflow-hidden">
+    <div className="h-[100dvh] flex flex-col p-2 sm:p-4 overflow-hidden">
       {/* Compact Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -231,8 +240,8 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className="mt-auto pt-2 pb-16 sm:pb-4">
-          <div className="flex flex-col gap-1.5 items-center">
+        <div className="mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4">
+          <div className="flex flex-col gap-1.5 items-center max-w-lg mx-auto">
             {KEYBOARD_ROWS.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1.5 justify-center">
                 {row.map((key) => {
@@ -342,19 +351,14 @@ export default function GameScreen({ showResults = false }) {
                 </div>
               </div>
 
-              {/* Game over - show final results */}
+              {/* Game over - show transition message */}
               {gameState.currentRound >= gameState.totalRounds && (
                 <div className="text-center mb-4 pt-2 border-t border-white/10">
                   <div className="text-lg sm:text-xl font-bold text-wordle-yellow mb-2">🎉 Game Over!</div>
-                  <div className="text-white/60 mb-3">
+                  <div className="text-white/60">
                     Winner: <span className="text-wordle-green font-bold">{sortedByTotal[0]?.name}</span> with {sortedByTotal[0]?.totalScore} points!
                   </div>
-                  <button
-                    onClick={() => endGame()}
-                    className="btn-primary"
-                  >
-                    Back to Lobby
-                  </button>
+                  <div className="text-white/40 text-sm mt-2">Final results coming...</div>
                 </div>
               )}
 

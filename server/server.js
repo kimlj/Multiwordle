@@ -224,14 +224,50 @@ function startNextRoundCountdown(roomCode) {
 function endGame(roomCode) {
   const room = gameManager.getRoom(roomCode);
   if (!room) return;
-  
+
   const finalResults = room.endGame();
-  io.to(roomCode).emit('gameEnd', finalResults);
+  io.to(roomCode).emit('gameEnd', {
+    ...finalResults,
+    gameState: room.getPublicState()
+  });
 }
 
 io.on('connection', (socket) => {
   console.log(`Player connected: ${socket.id}`);
-  
+
+  // Heartbeat ping to keep connection alive
+  socket.on('ping', () => {
+    // Just acknowledge - socket.io handles the actual ping/pong
+  });
+
+  // Sync state (for when page becomes visible again)
+  socket.on('syncState', ({ roomCode }, callback) => {
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'No room code' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room) {
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    // Check if this socket is in the room
+    if (!room.players.has(socket.id)) {
+      if (callback) callback({ success: false, error: 'Not in room' });
+      return;
+    }
+
+    if (callback) {
+      callback({
+        success: true,
+        gameState: room.getPublicState(),
+        playerState: room.getPlayerState(socket.id)
+      });
+    }
+  });
+
   // Create a new room
   socket.on('createRoom', ({ playerName, settings }, callback) => {
     const room = gameManager.createRoom(socket.id, playerName, settings);
@@ -421,15 +457,21 @@ io.on('connection', (socket) => {
   socket.on('toggleReady', (callback) => {
     const roomCode = playerRooms.get(socket.id);
     if (!roomCode) return;
-    
+
     const room = gameManager.getRoom(roomCode);
-    if (!room || room.state !== 'lobby') return;
-    
+    if (!room) return;
+
+    // Allow toggling ready in lobby OR gameEnd (for returned players)
+    if (room.state !== 'lobby' && room.state !== 'gameEnd') return;
+
     const player = room.players.get(socket.id);
     if (!player) return;
-    
+
+    // In gameEnd state, only allow if player has returned to lobby
+    if (room.state === 'gameEnd' && !player.returnedToLobby) return;
+
     room.setPlayerReady(socket.id, !player.ready);
-    
+
     io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
 
     callback({ ready: !player.ready });
@@ -461,7 +503,50 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (room.state === 'lobby') {
+    // Allow starting from lobby OR from gameEnd (if host has returned)
+    if (room.state === 'lobby' || room.state === 'gameEnd') {
+      // If in gameEnd, remove players who haven't returned and reset state
+      if (room.state === 'gameEnd') {
+        const playersToRemove = [];
+        for (const [playerId, player] of room.players) {
+          if (!player.returnedToLobby) {
+            playersToRemove.push(playerId);
+          }
+        }
+
+        // Remove non-returned players and notify them
+        for (const playerId of playersToRemove) {
+          const playerSocket = io.sockets.sockets.get(playerId);
+          room.players.delete(playerId);
+          playerRooms.delete(playerId);
+          if (playerSocket) {
+            playerSocket.emit('kicked', { message: 'Game started without you' });
+            playerSocket.leave(roomCode);
+          }
+        }
+
+        // Reset game state for remaining players
+        room.state = 'lobby';
+        room.currentRound = 0;
+        room.targetWord = null;
+        room.roundScores = [];
+
+        for (const p of room.players.values()) {
+          p.ready = p.id === room.hostId;
+          p.guesses = [];
+          p.results = [];
+          p.solved = false;
+          p.solvedAt = null;
+          p.solvedInGuesses = 0;
+          p.totalScore = 0;
+          p.roundScore = 0;
+          p.returnedToLobby = false;
+        }
+
+        // Notify remaining players of the updated state
+        io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+      }
+
       // Validate and set array of custom words (one per round)
       if (customWords && Array.isArray(customWords)) {
         const validatedWords = [];
@@ -571,13 +656,19 @@ io.on('connection', (socket) => {
     endRound(roomCode);
   });
 
-  // End game and return to lobby (host only)
+  // End game early (host only) - for ending during play
   socket.on('endGame', () => {
     const roomCode = playerRooms.get(socket.id);
     if (!roomCode) return;
 
     const room = gameManager.getRoom(roomCode);
-    if (!room || room.hostId !== socket.id) return;
+    if (!room) return;
+
+    // Only host can end game - players should use playAgain to return to lobby
+    if (room.hostId !== socket.id) return;
+
+    // Only allow during playing state (not gameEnd - use playAgain for that)
+    if (room.state !== 'playing') return;
 
     clearRoomTimers(roomCode);
 
@@ -588,7 +679,8 @@ io.on('connection', (socket) => {
     room.roundScores = [];
 
     for (const player of room.players.values()) {
-      player.ready = false;
+      // Host is always auto-ready
+      player.ready = player.id === room.hostId;
       player.guesses = [];
       player.results = [];
       player.solved = false;
@@ -600,33 +692,52 @@ io.on('connection', (socket) => {
 
     io.to(roomCode).emit('gameReset', room.getPublicState());
   });
-  
-  // Play again (reset game)
+
+  // Play again / Back to lobby (individual player action)
   socket.on('playAgain', () => {
     const roomCode = playerRooms.get(socket.id);
     if (!roomCode) return;
-    
+
     const room = gameManager.getRoom(roomCode);
-    if (!room || room.hostId !== socket.id) return;
-    
-    // Reset game state
-    room.state = 'lobby';
-    room.currentRound = 0;
-    room.targetWord = null;
-    room.roundScores = [];
-    
-    for (const player of room.players.values()) {
-      player.ready = false;
-      player.guesses = [];
-      player.results = [];
-      player.solved = false;
-      player.solvedAt = null;
-      player.solvedInGuesses = 0;
-      player.totalScore = 0;
-      player.roundScore = 0;
+    if (!room) return;
+
+    // Only allow when game has ended
+    if (room.state !== 'gameEnd' && room.state !== 'roundEnd') return;
+
+    // Mark this player as returned to lobby
+    const player = room.players.get(socket.id);
+    if (!player) return;
+
+    player.returnedToLobby = true;
+
+    // Check if all players have returned to lobby
+    const allReturned = [...room.players.values()].every(p => p.returnedToLobby);
+
+    if (allReturned) {
+      // Reset game state for everyone
+      room.state = 'lobby';
+      room.currentRound = 0;
+      room.targetWord = null;
+      room.roundScores = [];
+
+      for (const p of room.players.values()) {
+        // Host is always auto-ready
+        p.ready = p.id === room.hostId;
+        p.guesses = [];
+        p.results = [];
+        p.solved = false;
+        p.solvedAt = null;
+        p.solvedInGuesses = 0;
+        p.totalScore = 0;
+        p.roundScore = 0;
+        p.returnedToLobby = false;
+      }
+
+      io.to(roomCode).emit('gameReset', room.getPublicState());
+    } else {
+      // Notify all players about who has returned
+      io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
     }
-    
-    io.to(roomCode).emit('gameReset', room.getPublicState());
   });
 
   // Kick player (host only)
@@ -680,6 +791,7 @@ io.on('connection', (socket) => {
 
     const room = gameManager.getRoom(roomCode);
     if (room) {
+      const wasInGameEnd = room.state === 'gameEnd';
       const remaining = room.removePlayer(socket.id);
       socket.leave(roomCode);
 
@@ -692,6 +804,33 @@ io.on('connection', (socket) => {
           newHostId: room.hostId,
           gameState: room.getPublicState()
         });
+
+        // If we're in gameEnd state and player left, check if all remaining players have returned
+        if (wasInGameEnd) {
+          const allReturned = [...room.players.values()].every(p => p.returnedToLobby);
+          if (allReturned) {
+            // Reset game state for everyone
+            room.state = 'lobby';
+            room.currentRound = 0;
+            room.targetWord = null;
+            room.roundScores = [];
+
+            for (const p of room.players.values()) {
+              // Preserve ready state, only ensure host is ready
+              if (p.id === room.hostId) p.ready = true;
+              p.guesses = [];
+              p.results = [];
+              p.solved = false;
+              p.solvedAt = null;
+              p.solvedInGuesses = 0;
+              p.totalScore = 0;
+              p.roundScore = 0;
+              p.returnedToLobby = false;
+            }
+
+            io.to(roomCode).emit('gameReset', room.getPublicState());
+          }
+        }
       }
     }
     playerRooms.delete(socket.id);
@@ -705,6 +844,7 @@ io.on('connection', (socket) => {
       const room = gameManager.getRoom(roomCode);
       if (room) {
         const player = room.players.get(socket.id);
+        const wasInGameEnd = room.state === 'gameEnd';
 
         // Save player data for potential reconnection
         if (player) {
@@ -755,6 +895,33 @@ io.on('connection', (socket) => {
             newHostId: room.hostId,
             gameState: room.getPublicState()
           });
+
+          // If we're in gameEnd state and player disconnected, check if all remaining players have returned
+          if (wasInGameEnd) {
+            const allReturned = [...room.players.values()].every(p => p.returnedToLobby);
+            if (allReturned) {
+              // Reset game state for everyone
+              room.state = 'lobby';
+              room.currentRound = 0;
+              room.targetWord = null;
+              room.roundScores = [];
+
+              for (const p of room.players.values()) {
+                // Preserve ready state, only ensure host is ready
+                if (p.id === room.hostId) p.ready = true;
+                p.guesses = [];
+                p.results = [];
+                p.solved = false;
+                p.solvedAt = null;
+                p.solvedInGuesses = 0;
+                p.totalScore = 0;
+                p.roundScore = 0;
+                p.returnedToLobby = false;
+              }
+
+              io.to(roomCode).emit('gameReset', room.getPublicState());
+            }
+          }
         }
       }
       playerRooms.delete(socket.id);

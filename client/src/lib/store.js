@@ -5,6 +5,7 @@ export const useGameStore = create((set, get) => ({
   socket: null,
   connected: false,
   playerId: null,
+  isReconnecting: false,
   
   // Room state
   roomCode: null,
@@ -36,6 +37,7 @@ export const useGameStore = create((set, get) => ({
   setSocket: (socket) => set({ socket }),
   setConnected: (connected) => set({ connected }),
   setPlayerId: (playerId) => set({ playerId }),
+  setIsReconnecting: (isReconnecting) => set({ isReconnecting }),
   
   setRoomCode: (roomCode) => set({ roomCode }),
   setIsHost: (isHost) => set({ isHost }),
