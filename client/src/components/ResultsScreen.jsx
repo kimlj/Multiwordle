@@ -16,14 +16,14 @@ export default function ResultsScreen() {
   const isWinner = winner?.id === playerId;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 relative overflow-hidden">
       {/* Confetti effect */}
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none">
-          {[...Array(50)].map((_, i) => (
+          {[...Array(30)].map((_, i) => (
             <div
               key={i}
-              className="absolute w-3 h-3 rounded-sm"
+              className="absolute w-2 h-2 rounded-sm"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: '-20px',
@@ -35,7 +35,7 @@ export default function ResultsScreen() {
           ))}
         </div>
       )}
-      
+
       <style>{`
         @keyframes fall {
           0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
@@ -43,93 +43,77 @@ export default function ResultsScreen() {
         }
       `}</style>
 
-      <div className="max-w-2xl w-full">
-        <div className="glass rounded-3xl p-8 animate-bounce-in">
-          {/* Winner announcement */}
-          <div className="text-center mb-8">
-            <div className="text-6xl mb-4">🏆</div>
-            <h1 className="font-display text-4xl md:text-5xl font-bold mb-2">
+      <div className="max-w-md w-full">
+        <div className="glass rounded-2xl p-4 sm:p-6 animate-bounce-in">
+          {/* Winner announcement - compact */}
+          <div className="text-center mb-4">
+            <div className="text-4xl mb-2">🏆</div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">
               {isWinner ? 'You Win!' : `${winner?.name} Wins!`}
             </h1>
-            <p className="text-white/60">
-              with <span className="text-wordle-green font-bold text-2xl">{winner?.totalScore}</span> points
+            <p className="text-white/60 text-sm">
+              <span className="text-wordle-green font-bold text-lg">{winner?.totalScore}</span> pts
             </p>
           </div>
 
-          {/* Final Leaderboard */}
-          <div className="space-y-3 mb-8">
+          {/* Final Leaderboard - compact */}
+          <div className="space-y-1.5 mb-4 max-h-[45vh] overflow-y-auto">
             {players.map((player, idx) => (
               <div
                 key={player.id}
-                className={`leaderboard-item flex items-center justify-between p-4 rounded-xl ${
+                className={`leaderboard-item flex items-center justify-between py-2 px-3 rounded-lg ${
                   player.id === playerId ? 'player-you' : 'bg-white/5'
-                } ${idx === 0 ? 'border-2 border-wordle-green glow-green' : ''}`}
-                style={{ animationDelay: `${idx * 0.15}s` }}
+                } ${idx === 0 ? 'border border-wordle-green' : ''}`}
+                style={{ animationDelay: `${idx * 0.1}s` }}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   <div className={`
-                    w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg
-                    ${idx === 0 ? 'bg-yellow-400 text-black' : 
-                      idx === 1 ? 'bg-gray-300 text-black' : 
-                      idx === 2 ? 'bg-amber-600 text-white' : 
+                    w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs
+                    ${idx === 0 ? 'bg-yellow-400 text-black' :
+                      idx === 1 ? 'bg-gray-300 text-black' :
+                      idx === 2 ? 'bg-amber-600 text-white' :
                       'bg-white/10 text-white/60'}
                   `}>
                     {idx + 1}
                   </div>
-                  <div>
-                    <div className="font-bold text-lg">
-                      {player.name}
-                      {player.id === playerId && <span className="text-wordle-green"> (You)</span>}
-                    </div>
-                    <div className="text-sm text-white/40">
-                      {idx === 0 && '👑 Champion'}
-                    </div>
-                  </div>
+                  <span className="font-medium text-sm truncate max-w-[120px]">
+                    {player.name}
+                    {player.id === playerId && <span className="text-wordle-green"> (You)</span>}
+                  </span>
                 </div>
-                <div className="text-right">
-                  <div className={`font-bold text-2xl ${idx === 0 ? 'text-wordle-green' : ''}`}>
-                    {player.totalScore}
-                  </div>
-                  <div className="text-xs text-white/40">points</div>
+                <div className={`font-bold text-sm ${idx === 0 ? 'text-wordle-green' : ''}`}>
+                  {player.totalScore}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-1">🎯</div>
-              <div className="text-2xl font-bold">{gameState.totalRounds}</div>
-              <div className="text-xs text-white/40">Rounds Played</div>
+          {/* Stats - inline compact */}
+          <div className="flex justify-center gap-6 mb-4 text-center text-xs text-white/50">
+            <div>
+              <span className="font-bold text-white text-sm">{gameState.totalRounds}</span> rounds
             </div>
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-1">👥</div>
-              <div className="text-2xl font-bold">{players.length}</div>
-              <div className="text-xs text-white/40">Players</div>
+            <div>
+              <span className="font-bold text-white text-sm">{players.length}</span> players
             </div>
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <div className="text-3xl mb-1">⚡</div>
-              <div className="text-2xl font-bold">
-                {players.reduce((sum, p) => sum + p.totalScore, 0)}
-              </div>
-              <div className="text-xs text-white/40">Total Points</div>
+            <div>
+              <span className="font-bold text-white text-sm">{players.reduce((sum, p) => sum + p.totalScore, 0)}</span> total pts
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-center gap-4">
+          {/* Actions - compact */}
+          <div className="flex justify-center gap-3">
             <button
               onClick={playAgain}
-              className="btn-primary px-8"
+              className="btn-primary px-6 py-2 text-sm"
             >
               Back to Lobby
             </button>
             <button
               onClick={leaveRoom}
-              className="btn-secondary px-8"
+              className="btn-secondary px-6 py-2 text-sm"
             >
-              Back to Home
+              Leave
             </button>
           </div>
         </div>

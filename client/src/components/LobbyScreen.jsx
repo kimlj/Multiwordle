@@ -125,27 +125,20 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Waiting for others banner */}
-        {waitingForOthers && (
-          <div className="mb-6 p-4 bg-wordle-yellow/20 border border-wordle-yellow/40 rounded-xl text-center">
-            <div className="text-wordle-yellow font-bold mb-2">
-              {playersStillViewing.length > 0
-                ? 'Some players still viewing results'
-                : 'All players returned!'}
+        {/* Floating notification for waiting players */}
+        {waitingForOthers && playersStillViewing.length > 0 && (
+          <div className="fixed top-4 right-4 z-50 max-w-xs p-3 bg-wordle-yellow/20 backdrop-blur-sm border border-wordle-yellow/40 rounded-lg shadow-lg text-sm">
+            <div className="text-wordle-yellow font-medium">
+              {playersReturned}/{players.length} returned
             </div>
-            <div className="text-white/60 text-sm">
-              {playersReturned} of {players.length} players returned
-              {playersStillViewing.length > 0 && (
-                <span className="block mt-1">
-                  Still viewing: {playersStillViewing.map(p => p.name).join(', ')}
-                </span>
-              )}
-              {isHost && playersStillViewing.length > 0 && (
-                <span className="block mt-2 text-white/80">
-                  You can start without them - they'll be removed from the room
-                </span>
-              )}
+            <div className="text-white/60 text-xs mt-1">
+              Waiting: {playersStillViewing.map(p => p.name).join(', ')}
             </div>
+            {isHost && (
+              <div className="text-white/50 text-xs mt-1">
+                Start to play without them
+              </div>
+            )}
           </div>
         )}
 
