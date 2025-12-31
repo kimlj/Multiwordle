@@ -269,18 +269,23 @@ io.on('connection', (socket) => {
   });
 
   // Create a new room
-  socket.on('createRoom', ({ playerName, settings }, callback) => {
+  socket.on('createRoom', ({ playerName, settings, persistentId }, callback) => {
     const room = gameManager.createRoom(socket.id, playerName, settings);
+    // Store persistentId on the player
+    const player = room.players.get(socket.id);
+    if (player) {
+      player.persistentId = persistentId;
+    }
     playerRooms.set(socket.id, room.roomCode);
     socket.join(room.roomCode);
-    
+
     callback({
       success: true,
       roomCode: room.roomCode,
       gameState: room.getPublicState(),
       playerId: socket.id
     });
-    
+
     console.log(`Room ${room.roomCode} created by ${playerName}`);
   });
 
@@ -303,7 +308,7 @@ io.on('connection', (socket) => {
   });
 
   // Join an existing room
-  socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
+  socket.on('joinRoom', ({ roomCode, playerName, persistentId }, callback) => {
     const room = gameManager.getRoom(roomCode);
 
     if (!room) {
@@ -321,6 +326,12 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Store persistentId on the player
+    const player = room.players.get(socket.id);
+    if (player) {
+      player.persistentId = persistentId;
+    }
+
     // Cancel any pending room deletion
     const deletionTimer = roomDeletionTimers.get(roomCode);
     if (deletionTimer) {
@@ -331,7 +342,7 @@ io.on('connection', (socket) => {
 
     playerRooms.set(socket.id, roomCode);
     socket.join(roomCode);
-    
+
     callback({
       success: true,
       roomCode,
@@ -350,7 +361,7 @@ io.on('connection', (socket) => {
   });
 
   // Rejoin room (for reconnecting players)
-  socket.on('rejoinRoom', ({ roomCode, playerName }, callback) => {
+  socket.on('rejoinRoom', ({ roomCode, playerName, persistentId }, callback) => {
     const room = gameManager.getRoom(roomCode);
 
     if (!room) {
@@ -366,15 +377,29 @@ io.on('connection', (socket) => {
       console.log(`Cancelled deletion for room ${roomCode} - player rejoined`);
     }
 
-    const disconnectKey = `${playerName}:${roomCode}`;
-    const disconnectedPlayer = disconnectedPlayers.get(disconnectKey);
+    // Try to find by persistentId first, fall back to name
+    const disconnectKey = persistentId
+      ? `${persistentId}:${roomCode}`
+      : `${playerName}:${roomCode}`;
+    let disconnectedPlayer = disconnectedPlayers.get(disconnectKey);
 
-    // Also check if there's already a player with this name in the room (stale socket from reload)
+    // Fallback: try name-based key if persistentId key not found
+    if (!disconnectedPlayer && persistentId) {
+      disconnectedPlayer = disconnectedPlayers.get(`${playerName}:${roomCode}`);
+    }
+
+    // Check if there's already a player with this persistentId in the room (stale socket from reload)
+    // Fall back to name matching if no persistentId
     let existingPlayerEntry = null;
     for (const [id, player] of room.players) {
-      if (player.name === playerName && id !== socket.id) {
-        existingPlayerEntry = { id, player };
-        break;
+      if (id !== socket.id) {
+        if (persistentId && player.persistentId === persistentId) {
+          existingPlayerEntry = { id, player };
+          break;
+        } else if (!persistentId && player.name === playerName) {
+          existingPlayerEntry = { id, player };
+          break;
+        }
       }
     }
 
@@ -919,7 +944,10 @@ io.on('connection', (socket) => {
 
         // Save player data for potential reconnection
         if (player) {
-          const disconnectKey = `${player.name}:${roomCode}`;
+          // Use persistentId as primary key, with name as fallback
+          const disconnectKey = player.persistentId
+            ? `${player.persistentId}:${roomCode}`
+            : `${player.name}:${roomCode}`;
           disconnectedPlayers.set(disconnectKey, {
             playerId: socket.id,
             disconnectTime: Date.now(),

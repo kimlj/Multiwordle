@@ -4,14 +4,31 @@ import { useGameStore } from '../lib/store';
 
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 const SESSION_KEY = 'wordle_session';
+const PLAYER_ID_KEY = 'wordle_player_id';
 
 let socket = null;
 let heartbeatInterval = null;
 
+// Generate or get persistent player ID
+function getOrCreatePersistentId() {
+  try {
+    let id = localStorage.getItem(PLAYER_ID_KEY);
+    if (!id) {
+      id = 'p_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+      localStorage.setItem(PLAYER_ID_KEY, id);
+    }
+    return id;
+  } catch (e) {
+    // Fallback for private browsing
+    return 'p_' + Math.random().toString(36).substr(2, 9);
+  }
+}
+
 // Save session to localStorage
 function saveSession(roomCode, playerName) {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, playerName, timestamp: Date.now() }));
+    const persistentId = getOrCreatePersistentId();
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, playerName, persistentId, timestamp: Date.now() }));
   } catch (e) {
     console.warn('Could not save session:', e);
   }
@@ -97,7 +114,8 @@ export function useSocket() {
           console.log('Attempting to rejoin room:', session.roomCode);
           socket.emit('rejoinRoom', {
             roomCode: session.roomCode,
-            playerName: session.playerName
+            playerName: session.playerName,
+            persistentId: session.persistentId || getOrCreatePersistentId()
           }, (response) => {
             setIsReconnecting(false);
             if (response.success) {
@@ -263,7 +281,8 @@ export function useSocket() {
 
   const createRoom = useCallback((playerName, settings) => {
     return new Promise((resolve, reject) => {
-      socket.emit('createRoom', { playerName, settings }, (response) => {
+      const persistentId = getOrCreatePersistentId();
+      socket.emit('createRoom', { playerName, settings, persistentId }, (response) => {
         if (response.success) {
           setPlayerId(response.playerId);
           setRoomCode(response.roomCode);
@@ -280,7 +299,8 @@ export function useSocket() {
 
   const joinRoom = useCallback((roomCode, playerName) => {
     return new Promise((resolve, reject) => {
-      socket.emit('joinRoom', { roomCode, playerName }, (response) => {
+      const persistentId = getOrCreatePersistentId();
+      socket.emit('joinRoom', { roomCode, playerName, persistentId }, (response) => {
         if (response.success) {
           setPlayerId(response.playerId);
           setRoomCode(response.roomCode);
