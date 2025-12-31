@@ -297,6 +297,11 @@ export function useSocket() {
 
   const updateName = useCallback((newName) => {
     socket.emit('updateName', { newName });
+    // Update session with new name so reconnection works
+    const session = getSession();
+    if (session) {
+      saveSession(session.roomCode, newName);
+    }
   }, []);
 
   const toggleReady = useCallback(() => {

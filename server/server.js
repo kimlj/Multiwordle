@@ -369,7 +369,16 @@ io.on('connection', (socket) => {
     const disconnectKey = `${playerName}:${roomCode}`;
     const disconnectedPlayer = disconnectedPlayers.get(disconnectKey);
 
-    // Check if this player was recently disconnected
+    // Also check if there's already a player with this name in the room (stale socket from reload)
+    let existingPlayerEntry = null;
+    for (const [id, player] of room.players) {
+      if (player.name === playerName && id !== socket.id) {
+        existingPlayerEntry = { id, player };
+        break;
+      }
+    }
+
+    // Check if this player was recently disconnected OR has a stale socket in the room
     if (disconnectedPlayer && Date.now() - disconnectedPlayer.disconnectTime < RECONNECT_WINDOW_MS) {
       // Restore the player with their data
       const playerData = disconnectedPlayer.playerData;
@@ -419,6 +428,54 @@ io.on('connection', (socket) => {
       });
 
       console.log(`${playerName} reconnected to room ${roomCode}`);
+      return;
+    }
+
+    // Handle stale socket (player reloaded page, old socket still in room)
+    if (existingPlayerEntry) {
+      const { id: oldSocketId, player: existingPlayer } = existingPlayerEntry;
+
+      // Remove old socket from room
+      room.players.delete(oldSocketId);
+      playerRooms.delete(oldSocketId);
+
+      // Try to disconnect old socket
+      const oldSocket = io.sockets.sockets.get(oldSocketId);
+      if (oldSocket) {
+        oldSocket.leave(roomCode);
+        oldSocket.disconnect(true);
+      }
+
+      // Restore host status if they were the host
+      if (room.hostId === oldSocketId) {
+        room.hostId = socket.id;
+      }
+
+      // Add player back with new socket id
+      room.players.set(socket.id, {
+        ...existingPlayer,
+        id: socket.id
+      });
+
+      playerRooms.set(socket.id, roomCode);
+      socket.join(roomCode);
+
+      // Notify others
+      socket.to(roomCode).emit('playerJoined', {
+        playerId: socket.id,
+        playerName,
+        gameState: room.getPublicState()
+      });
+
+      callback({
+        success: true,
+        roomCode,
+        playerId: socket.id,
+        gameState: room.getPublicState(),
+        playerState: room.getPlayerState(socket.id)
+      });
+
+      console.log(`${playerName} took over stale socket in room ${roomCode}`);
       return;
     }
 
