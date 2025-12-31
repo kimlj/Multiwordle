@@ -13,6 +13,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   const [customWords, setCustomWords] = useState([]);
   const [showCustomWord, setShowCustomWord] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const [wordError, setWordError] = useState('');
 
   if (!gameState) return null;
@@ -53,6 +54,8 @@ export default function LobbyScreen({ waitingForOthers = false }) {
           text: `Join my Wordle Royale game! Room code: ${roomCode}`,
           url: shareUrl
         });
+        setShared(true);
+        setTimeout(() => setShared(false), 2000);
         return;
       } catch (err) {
         // User cancelled or share failed, fall back to clipboard
@@ -66,6 +69,8 @@ export default function LobbyScreen({ waitingForOthers = false }) {
     try {
       await navigator.clipboard.writeText(shareUrl);
       showToast('Link copied! Share it with friends');
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
     } catch (err) {
       // Clipboard failed, show manual copy
       showToast(`Share this link: ${shareUrl}`);
@@ -145,7 +150,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
         {/* Leave Room Button */}
         <button
           onClick={() => leaveRoom()}
-          className="mb-4 text-white/60 hover:text-white flex items-center gap-2 transition-colors"
+          className="text-white/60 hover:text-white flex items-center gap-2 transition-colors mb-4"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -153,129 +158,115 @@ export default function LobbyScreen({ waitingForOthers = false }) {
           Leave Room
         </button>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="font-display text-4xl font-bold mb-2">Game Lobby</h1>
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            <span className="text-white/60">Room Code:</span>
+        {/* Game Lobby Title + Room Code */}
+        <div className="text-center mb-6">
+          <h1 className="font-display text-3xl font-bold">Game Lobby</h1>
+          <div className="flex items-center justify-center gap-3 mt-2 text-sm">
             <button
               onClick={handleCopyCode}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
+              className="flex items-center gap-1.5 hover:opacity-80 transition-colors"
             >
-              <span className="font-mono text-2xl tracking-widest text-wordle-green">{roomCode}</span>
-              <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className={`font-mono tracking-wider ${copied ? 'text-wordle-green' : 'text-white/50'}`}>{roomCode}</span>
+              <svg className={`w-3.5 h-3.5 ${copied ? 'text-wordle-green' : 'text-white/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </button>
-            {copied && <span className="text-wordle-green text-sm">Copied!</span>}
+            <span className="text-white/30">•</span>
             <button
               onClick={handleShareLink}
-              className="flex items-center gap-2 px-4 py-2 bg-wordle-green/20 text-wordle-green rounded-lg hover:bg-wordle-green/30 transition-colors"
+              className={`flex items-center gap-1 transition-colors ${shared ? 'text-wordle-green' : 'text-white/50 hover:text-white/70'}`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
-              Share Link
+              Share
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Players List */}
-          <div className="glass rounded-2xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <span>Players</span>
-              <span className="text-white/40 text-sm">({players.length})</span>
-            </h2>
-            
-            <div className="space-y-3">
-              {players.map((player) => (
-                <div
-                  key={player.id}
-                  className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                    player.id === playerId ? 'player-you' : 'bg-white/5'
-                  } ${player.ready ? 'border-2 border-wordle-green' : 'border-2 border-transparent'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {player.id === gameState.hostId && (
-                      <span className="text-wordle-yellow text-xs font-bold px-2 py-1 bg-wordle-yellow/20 rounded">
-                        HOST
-                      </span>
-                    )}
-                    {player.id === playerId && editingName ? (
-                      <input
-                        type="text"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        onBlur={handleNameEdit}
-                        onKeyDown={(e) => e.key === 'Enter' && handleNameEdit()}
-                        className="bg-transparent border-b border-white/30 outline-none px-1"
-                        autoFocus
-                        maxLength={20}
-                      />
-                    ) : (
-                      <span className="font-medium">
-                        {player.name}
-                        {player.id === playerId && ' (You)'}
-                      </span>
-                    )}
-                    {player.id === playerId && !editingName && (
-                      <button
-                        onClick={() => {
-                          setNewName(player.name);
-                          setEditingName(true);
-                        }}
-                        className="text-white/40 hover:text-white"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                      player.ready
-                        ? 'bg-wordle-green/20 text-wordle-green'
-                        : 'bg-white/10 text-white/40'
-                    }`}>
-                      {player.ready ? '✓ Ready' : 'Waiting'}
-                    </div>
-                    {isHost && player.id !== playerId && (
-                      <button
-                        onClick={() => {
-                          kickPlayer(player.id).catch(err => showToast(err.message));
-                        }}
-                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
-                        title="Kick player"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {/* Only show Ready button to non-host players - host is always ready */}
-            {!isHost && (
-              <button
-                onClick={toggleReady}
-                className={`w-full mt-6 py-4 rounded-xl font-bold text-lg transition-all ${
-                  currentPlayer?.ready
-                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
-                    : 'bg-wordle-green text-white hover:bg-wordle-green/90'
-                }`}
-              >
-                {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
-              </button>
-            )}
+        {isHost ? (
+          /* HOST LAYOUT: Two columns - Players on left, Settings on right */
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Players List */}
+            <div className="glass rounded-2xl p-6">
+              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <span>Players</span>
+                <span className="text-white/40 text-sm">({players.length})</span>
+              </h2>
 
-            {/* Host Start Game Controls - placed after players list */}
-            {isHost && (
+              <div className="space-y-3">
+                {players.map((player) => (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
+                      player.id === playerId ? 'player-you' : 'bg-white/5'
+                    } ${player.ready ? 'border-2 border-wordle-green' : 'border-2 border-transparent'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {player.id === gameState.hostId && (
+                        <span className="text-wordle-yellow text-xs font-bold px-2 py-1 bg-wordle-yellow/20 rounded">
+                          HOST
+                        </span>
+                      )}
+                      {player.id === playerId && editingName ? (
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          onBlur={handleNameEdit}
+                          onKeyDown={(e) => e.key === 'Enter' && handleNameEdit()}
+                          className="bg-transparent border-b border-white/30 outline-none px-1"
+                          autoFocus
+                          maxLength={20}
+                        />
+                      ) : (
+                        <span className="font-medium">
+                          {player.name}
+                          {player.id === playerId && ' (You)'}
+                        </span>
+                      )}
+                      {player.id === playerId && !editingName && (
+                        <button
+                          onClick={() => {
+                            setNewName(player.name);
+                            setEditingName(true);
+                          }}
+                          className="text-white/40 hover:text-white"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        player.ready
+                          ? 'bg-wordle-green/20 text-wordle-green'
+                          : 'bg-white/10 text-white/40'
+                      }`}>
+                        {player.ready ? '✓ Ready' : 'Waiting'}
+                      </div>
+                      {player.id !== playerId && (
+                        <button
+                          onClick={() => {
+                            kickPlayer(player.id).catch(err => showToast(err.message));
+                          }}
+                          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+                          title="Kick player"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Host Start Game Controls */}
               <div className="mt-6 pt-6 border-t border-white/10">
                 <button
                   onClick={() => setShowCustomWord(!showCustomWord)}
@@ -334,15 +325,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                       : 'Start Game!'}
                 </button>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Settings */}
-          <div className="glass rounded-2xl p-6">
-            <h2 className="font-bold text-lg mb-4">Game Settings</h2>
-
-            {isHost ? (
-              /* Editable settings for host */
+            {/* Settings for Host */}
+            <div className="glass rounded-2xl p-6">
+              <h2 className="font-bold text-lg mb-4">Game Settings</h2>
               <div className="space-y-4">
                 {/* Game Mode Selection */}
                 <div>
@@ -469,38 +456,125 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                   </div>
                 </div>
               </div>
-            ) : (
-              /* Read-only settings for non-host */
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-white/60">Game Mode</span>
-                  <span className={`font-bold ${gameState.settings.gameMode === 'battleRoyale' ? 'text-red-400' : 'text-wordle-green'}`}>
+            </div>
+          </div>
+        ) : (
+          /* NON-HOST LAYOUT: Single column - Settings bar, Players, Ready, Scoring */
+          <div className="max-w-lg mx-auto space-y-4">
+            {/* Compact Settings Bar */}
+            <div className="glass rounded-xl p-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                    gameState.settings.gameMode === 'battleRoyale'
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'bg-wordle-green/20 text-wordle-green'
+                  }`}>
                     {gameState.settings.gameMode === 'battleRoyale' ? 'Elimination' : 'Classic'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-white/60">Rounds</span>
-                  <span className="font-bold">{gameState.settings.rounds}</span>
+                <div className="flex items-center gap-4 text-sm">
+                  <div>
+                    <span className="text-white/40">Rounds: </span>
+                    <span className="font-bold">{gameState.settings.rounds}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40">Time: </span>
+                    <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-white/60">Round Time</span>
-                  <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
-                </div>
-                {gameState.settings.gameMode === 'battleRoyale' && (
-                  <p className="text-xs text-red-400/80 text-center mt-2">
-                    Lowest scorer eliminated each round!
-                  </p>
-                )}
               </div>
-            )}
+              {gameState.settings.gameMode === 'battleRoyale' && (
+                <p className="text-xs text-red-400/60 text-center mt-2">
+                  Lowest scorer eliminated each round!
+                </p>
+              )}
+            </div>
 
-            {!isHost && allReady && (
-              <div className="mt-6 pt-6 border-t border-white/10 text-center text-white/60">
-                <p>Waiting for host to start the game...</p>
+            {/* Players List */}
+            <div className="glass rounded-2xl p-6">
+              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <span>Players</span>
+                <span className="text-white/40 text-sm">({players.length})</span>
+              </h2>
+
+              <div className="space-y-3">
+                {players.map((player) => (
+                  <div
+                    key={player.id}
+                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
+                      player.id === playerId ? 'player-you' : 'bg-white/5'
+                    } ${player.ready ? 'border-2 border-wordle-green' : 'border-2 border-transparent'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {player.id === gameState.hostId && (
+                        <span className="text-wordle-yellow text-xs font-bold px-2 py-1 bg-wordle-yellow/20 rounded">
+                          HOST
+                        </span>
+                      )}
+                      {player.id === playerId && editingName ? (
+                        <input
+                          type="text"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          onBlur={handleNameEdit}
+                          onKeyDown={(e) => e.key === 'Enter' && handleNameEdit()}
+                          className="bg-transparent border-b border-white/30 outline-none px-1"
+                          autoFocus
+                          maxLength={20}
+                        />
+                      ) : (
+                        <span className="font-medium">
+                          {player.name}
+                          {player.id === playerId && ' (You)'}
+                        </span>
+                      )}
+                      {player.id === playerId && !editingName && (
+                        <button
+                          onClick={() => {
+                            setNewName(player.name);
+                            setEditingName(true);
+                          }}
+                          className="text-white/40 hover:text-white"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                      player.ready
+                        ? 'bg-wordle-green/20 text-wordle-green'
+                        : 'bg-white/10 text-white/40'
+                    }`}>
+                      {player.ready ? '✓ Ready' : 'Waiting'}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+
+              {/* Ready Button */}
+              <button
+                onClick={toggleReady}
+                className={`w-full mt-6 py-4 rounded-xl font-bold text-lg transition-all ${
+                  currentPlayer?.ready
+                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
+                    : 'bg-wordle-green text-white hover:bg-wordle-green/90'
+                }`}
+              >
+                {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
+              </button>
+
+              {allReady && (
+                <div className="mt-4 text-center text-white/60 text-sm">
+                  Waiting for host to start the game...
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Scoring Info */}
         <div className="mt-8 glass rounded-2xl p-6">
