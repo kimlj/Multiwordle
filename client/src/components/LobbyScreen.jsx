@@ -188,23 +188,23 @@ export default function LobbyScreen({ waitingForOthers = false }) {
           /* HOST LAYOUT: Two columns - Players on left, Settings on right */
           <div className="grid md:grid-cols-2 gap-6">
             {/* Players List */}
-            <div className="glass rounded-2xl p-6">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <div className="glass rounded-2xl p-4">
+              <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
                 <span>Players</span>
-                <span className="text-white/40 text-sm">({players.length})</span>
+                <span className="text-white/40 text-xs">({players.length})</span>
               </h2>
 
-              <div className="space-y-3">
+              <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
                 {players.map((player) => (
                   <div
                     key={player.id}
-                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                      player.id === playerId ? 'player-you' : 'bg-white/5'
-                    } ${player.ready ? 'border-2 border-wordle-green' : 'border-2 border-transparent'}`}
+                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all ${
+                      player.id === playerId ? 'bg-wordle-green/10' : 'bg-white/5'
+                    } ${player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {player.id === gameState.hostId && (
-                        <span className="text-wordle-yellow text-xs font-bold px-2 py-1 bg-wordle-yellow/20 rounded">
+                        <span className="text-wordle-yellow text-[10px] font-bold px-1.5 py-0.5 bg-wordle-yellow/20 rounded shrink-0">
                           HOST
                         </span>
                       )}
@@ -215,48 +215,39 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                           onChange={(e) => setNewName(e.target.value)}
                           onBlur={handleNameEdit}
                           onKeyDown={(e) => e.key === 'Enter' && handleNameEdit()}
-                          className="bg-transparent border-b border-white/30 outline-none px-1"
+                          className="bg-transparent border-b border-white/30 outline-none px-1 text-sm w-24"
                           autoFocus
                           maxLength={20}
                         />
                       ) : (
-                        <span className="font-medium">
+                        <span className="text-sm truncate">
                           {player.name}
-                          {player.id === playerId && ' (You)'}
+                          {player.id === playerId && <span className="text-white/40 text-xs"> (You)</span>}
                         </span>
                       )}
                       {player.id === playerId && !editingName && (
                         <button
-                          onClick={() => {
-                            setNewName(player.name);
-                            setEditingName(true);
-                          }}
-                          className="text-white/40 hover:text-white"
+                          onClick={() => { setNewName(player.name); setEditingName(true); }}
+                          className="text-white/40 hover:text-white shrink-0"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                        player.ready
-                          ? 'bg-wordle-green/20 text-wordle-green'
-                          : 'bg-white/10 text-white/40'
-                      }`}>
-                        {player.ready ? '✓ Ready' : 'Waiting'}
-                      </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
+                        {player.ready ? '✓' : '○'}
+                      </span>
                       {player.id !== playerId && (
                         <button
-                          onClick={() => {
-                            kickPlayer(player.id).catch(err => showToast(err.message));
-                          }}
-                          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
-                          title="Kick player"
+                          onClick={() => kickPlayer(player.id).catch(err => showToast(err.message))}
+                          className="p-0.5 text-red-400/60 hover:text-red-400 rounded transition-colors"
+                          title="Kick"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -267,48 +258,43 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               </div>
 
               {/* Host Start Game Controls */}
-              <div className="mt-6 pt-6 border-t border-white/10">
+              <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={() => setShowCustomWord(!showCustomWord)}
-                  className="w-full py-3 px-4 bg-white/5 rounded-lg text-left hover:bg-white/10 transition-colors mb-3"
+                  className="w-full py-2 px-3 bg-white/5 rounded-lg text-left hover:bg-white/10 transition-colors mb-2 text-sm"
                 >
                   <div className="flex justify-between items-center">
-                    <span>Set Custom Word</span>
-                    <span className="text-white/40">{showCustomWord ? '▲' : '▼'}</span>
+                    <span className="text-white/70">Custom Words</span>
+                    <span className="text-white/40 text-xs">{showCustomWord ? '▲' : '▼'}</span>
                   </div>
                 </button>
 
                 {showCustomWord && (
-                  <div className="mb-4 p-4 bg-white/5 rounded-lg">
-                    <p className="text-sm text-white/60 mb-3 text-center">
-                      Set custom words for each round (leave empty for random)
-                    </p>
-                    <div className="space-y-2 mb-3">
+                  <div className="mb-3 p-3 bg-white/5 rounded-lg">
+                    <div className="space-y-1.5 mb-2 max-h-[120px] overflow-y-auto">
                       {customWords.map((word, idx) => (
                         <div key={idx} className="flex items-center gap-2">
-                          <span className="text-white/40 text-sm w-20">Round {idx + 1}:</span>
+                          <span className="text-white/40 text-xs w-12">R{idx + 1}:</span>
                           <input
                             type="text"
                             value={word}
                             onChange={(e) => handleCustomWordChange(idx, e.target.value)}
                             placeholder="WORD"
-                            className={`input-dark flex-1 text-center tracking-widest font-mono text-sm py-2 ${
+                            className={`input-dark flex-1 text-center tracking-widest font-mono text-xs py-1.5 ${
                               word.length > 0 && word.length < 5 ? 'border-orange-500' : ''
                             } ${word.length === 5 ? 'border-wordle-green' : ''}`}
                             maxLength={5}
                           />
-                          {word.length === 5 && <span className="text-wordle-green">✓</span>}
+                          {word.length === 5 && <span className="text-wordle-green text-xs">✓</span>}
                         </div>
                       ))}
                     </div>
-                    {wordError && (
-                      <p className="text-red-400 text-sm mb-2 text-center">{wordError}</p>
-                    )}
+                    {wordError && <p className="text-red-400 text-xs mb-2 text-center">{wordError}</p>}
                     <button
                       onClick={handleStartWithWords}
-                      className="w-full py-2 bg-wordle-yellow text-black rounded-lg font-bold"
+                      className="w-full py-1.5 bg-wordle-yellow text-black rounded-lg font-bold text-sm"
                     >
-                      {hasAnyCustomWord ? 'Start with Custom Words' : 'Start Game'}
+                      {hasAnyCustomWord ? 'Start Custom' : 'Start'}
                     </button>
                   </div>
                 )}
@@ -316,68 +302,60 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                 <button
                   onClick={handleStartGame}
                   disabled={!allReady}
-                  className="w-full py-4 bg-wordle-green text-white rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="w-full py-3 bg-wordle-green text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {!allReady
                     ? 'Waiting for players...'
                     : waitingForOthers && playersStillViewing.length > 0
-                      ? `Start with ${returnedPlayers.length} player${returnedPlayers.length !== 1 ? 's' : ''}`
+                      ? `Start (${returnedPlayers.length} ready)`
                       : 'Start Game!'}
                 </button>
               </div>
             </div>
 
             {/* Settings for Host */}
-            <div className="glass rounded-2xl p-6">
-              <h2 className="font-bold text-lg mb-4">Game Settings</h2>
-              <div className="space-y-4">
+            <div className="glass rounded-2xl p-4">
+              <h2 className="font-bold text-base mb-3">Game Settings</h2>
+              <div className="space-y-3">
                 {/* Game Mode Selection */}
                 <div>
-                  <label className="block text-sm text-white/60 mb-2">Game Mode</label>
+                  <label className="block text-xs text-white/60 mb-1.5">Game Mode</label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => updateSettings({ gameMode: 'classic' })}
-                      className={`flex-1 py-3 rounded-lg font-bold transition-all ${
+                      className={`flex-1 py-2 rounded-lg font-bold transition-all ${
                         gameState.settings.gameMode !== 'battleRoyale'
                           ? 'bg-wordle-green text-white'
                           : 'bg-white/10 text-white/60 hover:bg-white/20'
                       }`}
                     >
-                      <div className="text-sm">Classic</div>
-                      <div className="text-xs opacity-60">Fixed rounds</div>
+                      <div className="text-xs">Classic</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => updateSettings({ gameMode: 'battleRoyale' })}
-                      className={`flex-1 py-3 rounded-lg font-bold transition-all ${
+                      className={`flex-1 py-2 rounded-lg font-bold transition-all ${
                         gameState.settings.gameMode === 'battleRoyale'
                           ? 'bg-red-500 text-white'
                           : 'bg-white/10 text-white/60 hover:bg-white/20'
                       }`}
                     >
-                      <div className="text-sm">Elimination</div>
-                      <div className="text-xs opacity-60">Last one standing</div>
+                      <div className="text-xs">Elimination</div>
                     </button>
                   </div>
-                  {gameState.settings.gameMode === 'battleRoyale' && (
-                    <p className="text-xs text-red-400/80 mt-2 text-center">
-                      Lowest scorer eliminated each round. Last player wins!
-                    </p>
-                  )}
                 </div>
 
+                {/* Rounds */}
                 <div>
-                  <label className="block text-sm text-white/60 mb-2">
-                    {gameState.settings.gameMode === 'battleRoyale' ? 'Max Rounds (if no winner)' : 'Number of Rounds'}
-                  </label>
-                  <div className="flex gap-2">
+                  <label className="block text-xs text-white/60 mb-1.5">Rounds</label>
+                  <div className="flex gap-1.5">
                     {[1, 3, 5, 7].map((n) => (
                       <button
                         key={n}
                         type="button"
                         onClick={() => updateSettings({ rounds: n })}
-                        className={`flex-1 py-2 rounded-lg font-bold transition-all ${
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${
                           gameState.settings.rounds === n
                             ? 'bg-wordle-green text-white'
                             : 'bg-white/10 text-white/60 hover:bg-white/20'
@@ -396,7 +374,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                         updateSettings({ rounds: Math.min(99, Math.max(1, val)) });
                       }}
                       placeholder="#"
-                      className={`w-14 py-2 rounded-lg font-bold text-center transition-all ${
+                      className={`w-12 py-1.5 rounded-lg text-sm font-bold text-center transition-all ${
                         ![1, 3, 5, 7].includes(gameState.settings.rounds)
                           ? 'bg-wordle-green text-white'
                           : 'bg-white/10 text-white/60 hover:bg-white/20'
@@ -405,9 +383,10 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                   </div>
                 </div>
 
+                {/* Time Per Round */}
                 <div>
-                  <label className="block text-sm text-white/60 mb-2">Time Per Round</label>
-                  <div className="flex gap-2">
+                  <label className="block text-xs text-white/60 mb-1.5">Time Per Round</label>
+                  <div className="flex gap-1.5">
                     {[
                       { label: '1m', value: 60 },
                       { label: '2m', value: 120 },
@@ -418,7 +397,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                         key={opt.value}
                         type="button"
                         onClick={() => updateSettings({ roundTimeSeconds: opt.value })}
-                        className={`flex-1 py-2 rounded-lg font-bold transition-all ${
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${
                           gameState.settings.roundTimeSeconds === opt.value
                             ? 'bg-wordle-green text-white'
                             : 'bg-white/10 text-white/60 hover:bg-white/20'
@@ -427,9 +406,6 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                         {opt.label}
                       </button>
                     ))}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-white/40 text-sm">Custom:</span>
                     <input
                       type="number"
                       min="10"
@@ -437,80 +413,87 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                       value={![60, 120, 180, 300].includes(gameState.settings.roundTimeSeconds) ? gameState.settings.roundTimeSeconds : ''}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
-                        if (!isNaN(val)) {
-                          updateSettings({ roundTimeSeconds: val });
-                        }
+                        if (!isNaN(val)) updateSettings({ roundTimeSeconds: val });
                       }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value) || 60;
-                        updateSettings({ roundTimeSeconds: Math.min(3600, Math.max(10, val)) });
-                      }}
-                      placeholder="seconds"
-                      className={`w-20 py-1 rounded-lg font-bold text-center text-sm transition-all ${
+                      placeholder="sec"
+                      className={`w-14 py-1.5 rounded-lg text-sm font-bold text-center transition-all ${
                         ![60, 120, 180, 300].includes(gameState.settings.roundTimeSeconds)
                           ? 'bg-wordle-green text-white'
                           : 'bg-white/10 text-white/60 hover:bg-white/20'
                       }`}
                     />
-                    <span className="text-white/40 text-sm">sec</span>
                   </div>
                 </div>
 
-                {/* Mirror Match Toggle */}
-                <div>
-                  <label className="block text-sm text-white/60 mb-2">Mirror Match</label>
+                {/* 2x2 Grid for Modifiers */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {/* Mirror Match */}
                   <button
                     type="button"
                     onClick={() => updateSettings({ mirrorMatch: !gameState.settings.mirrorMatch })}
-                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                    className={`p-2.5 rounded-lg font-bold transition-all text-left ${
                       gameState.settings.mirrorMatch
-                        ? 'bg-wordle-yellow text-black'
-                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                        ? 'bg-wordle-yellow/20 border border-wordle-yellow'
+                        : 'bg-white/5 border border-transparent hover:bg-white/10'
                     }`}
                   >
-                    <span>{gameState.settings.mirrorMatch ? '🪞 Enabled' : 'Disabled'}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>🪞</span>
+                      <span className={`text-xs ${gameState.settings.mirrorMatch ? 'text-wordle-yellow' : 'text-white/70'}`}>Mirror</span>
+                    </div>
+                    <p className="text-[10px] text-white/40 mt-0.5">Same opener for all</p>
                   </button>
-                  <p className="text-xs text-white/40 mt-2 text-center">
-                    Everyone starts with the same random opener word
-                  </p>
-                </div>
 
-                {/* Hardcore Mode Toggle */}
-                <div>
-                  <label className="block text-sm text-white/60 mb-2">Hardcore Mode</label>
+                  {/* Hardcore Mode */}
                   <button
                     type="button"
                     onClick={() => updateSettings({ hardcoreMode: !gameState.settings.hardcoreMode })}
-                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                    className={`p-2.5 rounded-lg font-bold transition-all text-left ${
                       gameState.settings.hardcoreMode
-                        ? 'bg-red-500 text-white'
-                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                        ? 'bg-red-500/20 border border-red-500'
+                        : 'bg-white/5 border border-transparent hover:bg-white/10'
                     }`}
                   >
-                    <span>{gameState.settings.hardcoreMode ? '💀 Enabled' : 'Disabled'}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>💀</span>
+                      <span className={`text-xs ${gameState.settings.hardcoreMode ? 'text-red-400' : 'text-white/70'}`}>Hardcore</span>
+                    </div>
+                    <p className="text-[10px] text-white/40 mt-0.5">No keyboard colors</p>
                   </button>
-                  <p className="text-xs text-white/40 mt-2 text-center">
-                    No keyboard colors - pure memory
-                  </p>
-                </div>
 
-                {/* Fresh Openers Toggle */}
-                <div>
-                  <label className="block text-sm text-white/60 mb-2">Fresh Openers</label>
+                  {/* Fresh Openers */}
                   <button
                     type="button"
                     onClick={() => updateSettings({ freshOpenersOnly: !gameState.settings.freshOpenersOnly })}
-                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                    className={`p-2.5 rounded-lg font-bold transition-all text-left ${
                       gameState.settings.freshOpenersOnly
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                        ? 'bg-blue-500/20 border border-blue-500'
+                        : 'bg-white/5 border border-transparent hover:bg-white/10'
                     }`}
                   >
-                    <span>{gameState.settings.freshOpenersOnly ? '🆕 Enabled' : 'Disabled'}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>🆕</span>
+                      <span className={`text-xs ${gameState.settings.freshOpenersOnly ? 'text-blue-400' : 'text-white/70'}`}>Fresh</span>
+                    </div>
+                    <p className="text-[10px] text-white/40 mt-0.5">New opener/round</p>
                   </button>
-                  <p className="text-xs text-white/40 mt-2 text-center">
-                    Can't reuse openers from previous rounds
-                  </p>
+
+                  {/* Power-ups */}
+                  <button
+                    type="button"
+                    onClick={() => updateSettings({ powerUpsEnabled: !gameState.settings.powerUpsEnabled })}
+                    className={`p-2.5 rounded-lg font-bold transition-all text-left ${
+                      gameState.settings.powerUpsEnabled
+                        ? 'bg-gradient-to-r from-orange-500/20 to-pink-500/20 border border-orange-500'
+                        : 'bg-white/5 border border-transparent hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>⚡</span>
+                      <span className={`text-xs ${gameState.settings.powerUpsEnabled ? 'text-orange-400' : 'text-white/70'}`}>Items</span>
+                    </div>
+                    <p className="text-[10px] text-white/40 mt-0.5">Power & sabotage</p>
+                  </button>
                 </div>
               </div>
             </div>
@@ -544,6 +527,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     Fresh
                   </span>
                 )}
+                {gameState.settings.powerUpsEnabled && (
+                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-orange-500/20 to-pink-500/20 text-orange-400">
+                    ⚡ Items
+                  </span>
+                )}
               </div>
 
               {/* Stats row */}
@@ -559,36 +547,37 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               </div>
 
               {/* Summary */}
-              {(gameState.settings.gameMode === 'battleRoyale' || gameState.settings.mirrorMatch || gameState.settings.hardcoreMode || gameState.settings.freshOpenersOnly) && (
+              {(gameState.settings.gameMode === 'battleRoyale' || gameState.settings.mirrorMatch || gameState.settings.hardcoreMode || gameState.settings.freshOpenersOnly || gameState.settings.powerUpsEnabled) && (
                 <p className="text-xs text-white/50 text-center">
                   {[
                     gameState.settings.gameMode === 'battleRoyale' && 'Lowest scorer eliminated',
                     gameState.settings.mirrorMatch && 'Same opener for all',
                     gameState.settings.hardcoreMode && 'No keyboard colors',
-                    gameState.settings.freshOpenersOnly && 'New opener each round'
+                    gameState.settings.freshOpenersOnly && 'New opener each round',
+                    gameState.settings.powerUpsEnabled && 'Power-ups & sabotages'
                   ].filter(Boolean).join(' • ')}
                 </p>
               )}
             </div>
 
             {/* Players List */}
-            <div className="glass rounded-2xl p-6">
-              <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <div className="glass rounded-2xl p-4">
+              <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
                 <span>Players</span>
-                <span className="text-white/40 text-sm">({players.length})</span>
+                <span className="text-white/40 text-xs">({players.length})</span>
               </h2>
 
-              <div className="space-y-3">
+              <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
                 {players.map((player) => (
                   <div
                     key={player.id}
-                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                      player.id === playerId ? 'player-you' : 'bg-white/5'
-                    } ${player.ready ? 'border-2 border-wordle-green' : 'border-2 border-transparent'}`}
+                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all ${
+                      player.id === playerId ? 'bg-wordle-green/10' : 'bg-white/5'
+                    } ${player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {player.id === gameState.hostId && (
-                        <span className="text-wordle-yellow text-xs font-bold px-2 py-1 bg-wordle-yellow/20 rounded">
+                        <span className="text-wordle-yellow text-[10px] font-bold px-1.5 py-0.5 bg-wordle-yellow/20 rounded shrink-0">
                           HOST
                         </span>
                       )}
@@ -599,38 +588,31 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                           onChange={(e) => setNewName(e.target.value)}
                           onBlur={handleNameEdit}
                           onKeyDown={(e) => e.key === 'Enter' && handleNameEdit()}
-                          className="bg-transparent border-b border-white/30 outline-none px-1"
+                          className="bg-transparent border-b border-white/30 outline-none px-1 text-sm w-24"
                           autoFocus
                           maxLength={20}
                         />
                       ) : (
-                        <span className="font-medium">
+                        <span className="text-sm truncate">
                           {player.name}
-                          {player.id === playerId && ' (You)'}
+                          {player.id === playerId && <span className="text-white/40 text-xs"> (You)</span>}
                         </span>
                       )}
                       {player.id === playerId && !editingName && (
                         <button
-                          onClick={() => {
-                            setNewName(player.name);
-                            setEditingName(true);
-                          }}
-                          className="text-white/40 hover:text-white"
+                          onClick={() => { setNewName(player.name); setEditingName(true); }}
+                          className="text-white/40 hover:text-white shrink-0"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
                       )}
                     </div>
 
-                    <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                      player.ready
-                        ? 'bg-wordle-green/20 text-wordle-green'
-                        : 'bg-white/10 text-white/40'
-                    }`}>
-                      {player.ready ? '✓ Ready' : 'Waiting'}
-                    </div>
+                    <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
+                      {player.ready ? '✓' : '○'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -638,7 +620,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               {/* Ready Button */}
               <button
                 onClick={toggleReady}
-                className={`w-full mt-6 py-4 rounded-xl font-bold text-lg transition-all ${
+                className={`w-full mt-4 py-3 rounded-xl font-bold transition-all ${
                   currentPlayer?.ready
                     ? 'bg-white/10 text-white/60 hover:bg-white/20'
                     : 'bg-wordle-green text-white hover:bg-wordle-green/90'
@@ -648,8 +630,8 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               </button>
 
               {allReady && (
-                <div className="mt-4 text-center text-white/60 text-sm">
-                  Waiting for host to start the game...
+                <div className="mt-3 text-center text-white/50 text-xs">
+                  Waiting for host to start...
                 </div>
               )}
             </div>

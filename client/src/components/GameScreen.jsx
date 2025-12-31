@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 import WordleGrid from './WordleGrid';
@@ -8,6 +8,22 @@ const KEYBOARD_ROWS = [
   ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
   ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'DEL']
 ];
+
+const LETTER_PICKER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+// Item definitions for UI
+const ITEM_INFO = {
+  letter_snipe: { name: 'Letter Snipe', emoji: '🎯', type: 'powerup', needsLetter: true, desc: 'Check if a letter is in the word' },
+  shield: { name: 'Shield', emoji: '🛡️', type: 'powerup', passive: true, desc: 'Auto-blocks next sabotage' },
+  letter_reveal: { name: 'Letter Reveal', emoji: '✨', type: 'powerup', desc: 'Shows one correct letter position' },
+  time_warp: { name: 'Time Warp', emoji: '⏰', type: 'powerup', desc: '+30 seconds to your timer' },
+  blindfold: { name: 'Blindfold', emoji: '🙈', type: 'sabotage', needsTarget: true, desc: 'Blanks their keyboard letters' },
+  flip_it: { name: 'Flip It', emoji: '🙃', type: 'sabotage', needsTarget: true, desc: 'Flips screen upside down' },
+  keyboard_shuffle: { name: 'Keyboard Shuffle', emoji: '🔀', type: 'sabotage', needsTarget: true, desc: 'Randomizes keyboard layout' },
+  invisible_ink: { name: 'Invisible Ink', emoji: '👻', type: 'sabotage', needsTarget: true, desc: 'Hides their guesses & colors' },
+  amnesia: { name: 'Amnesia', emoji: '🧠', type: 'sabotage', needsTarget: true, desc: 'Wipes keyboard colors permanently' },
+  identity_theft: { name: 'Identity Theft', emoji: '🔄', type: 'sabotage', needsTarget: true, legendary: true, desc: 'Swap all progress with target' }
+};
 
 export default function GameScreen({ showResults = false }) {
   const {
@@ -22,16 +38,25 @@ export default function GameScreen({ showResults = false }) {
     showToast,
     roundEndData,
     nextRoundCountdown,
-    keyboardStatus
+    keyboardStatus,
+    inventory,
+    activeEffects,
+    itemNotification,
+    revealedLetters,
+    letterSnipeResult,
+    isBonusTime
   } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
   const isHost = gameState?.hostId === playerId;
 
-  const { submitGuess, forceEndRound, endGame } = useSocket();
+  const { submitGuess, forceEndRound, endGame, useItem, letterSnipe, debugGiveAllItems } = useSocket();
   const [showHostMenu, setShowHostMenu] = useState(false);
   const [showOtherPlayers, setShowOtherPlayers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [showTargetPicker, setShowTargetPicker] = useState(false);
+  const [showLetterPicker, setShowLetterPicker] = useState(false);
 
   // Close host menu when clicking outside
   useEffect(() => {
@@ -102,6 +127,49 @@ export default function GameScreen({ showResults = false }) {
     }
   }, [handleSubmit, removeLetter, addLetter, playerState]);
 
+  // Item usage handlers
+  const handleItemClick = useCallback((item) => {
+    const info = ITEM_INFO[item.id];
+    if (!info) return;
+
+    if (info.passive) {
+      showToast('Shield blocks sabotages automatically!');
+      return;
+    }
+
+    if (info.needsTarget) {
+      setSelectedItem(item);
+      setShowTargetPicker(true);
+    } else if (info.needsLetter) {
+      setSelectedItem(item);
+      setShowLetterPicker(true);
+    } else {
+      // Direct use items (letter_reveal, time_warp)
+      useItem(item.id).catch(err => showToast(err.message));
+    }
+  }, [useItem, showToast]);
+
+  const handleTargetSelect = useCallback(async (targetId) => {
+    if (!selectedItem) return;
+    try {
+      await useItem(selectedItem.id, targetId);
+    } catch (err) {
+      showToast(err.message);
+    }
+    setSelectedItem(null);
+    setShowTargetPicker(false);
+  }, [selectedItem, useItem, showToast]);
+
+  const handleLetterSelect = useCallback(async (letter) => {
+    try {
+      await letterSnipe(letter);
+    } catch (err) {
+      showToast(err.message);
+    }
+    setSelectedItem(null);
+    setShowLetterPicker(false);
+  }, [letterSnipe, showToast]);
+
   if (!gameState) return null;
 
   const players = Object.values(gameState.players);
@@ -112,6 +180,28 @@ export default function GameScreen({ showResults = false }) {
   const isEliminated = currentPlayer?.eliminated || false;
   const activePlayers = players.filter(p => !p.eliminated);
   const eliminatedThisRound = gameState.eliminatedThisRound;
+  const powerUpsEnabled = gameState.settings?.powerUpsEnabled || false;
+
+  // Check for active visual effects
+  const hasBlindfold = activeEffects.some(e => e.effect === 'blindfold' && e.expiresAt > Date.now());
+  const hasFlip = activeEffects.some(e => e.effect === 'flip_it' && e.expiresAt > Date.now());
+  const hasInvisibleInk = activeEffects.some(e => e.effect === 'invisible_ink' && e.expiresAt > Date.now());
+  const hasAmnesia = activeEffects.some(e => e.effect === 'amnesia');
+  const keyboardShuffleEffect = activeEffects.find(e => e.effect === 'keyboard_shuffle' && e.expiresAt > Date.now());
+
+  // Generate shuffled keyboard if needed
+  const shuffledKeyboard = useMemo(() => {
+    const shuffledKeys = keyboardShuffleEffect?.data?.shuffledKeys;
+    if (!shuffledKeys || shuffledKeys.length !== 26) return null;
+    return [
+      shuffledKeys.slice(0, 10),
+      shuffledKeys.slice(10, 19),
+      ['ENTER', ...shuffledKeys.slice(19), 'DEL']
+    ];
+  }, [keyboardShuffleEffect]);
+
+  // Use shuffled keyboard if active, otherwise normal
+  const displayKeyboard = shuffledKeyboard || KEYBOARD_ROWS;
 
   const formatTime = (ms) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -176,6 +266,14 @@ export default function GameScreen({ showResults = false }) {
                   >
                     End Game
                   </button>
+                  {powerUpsEnabled && (
+                    <button
+                      onClick={() => { debugGiveAllItems().then(() => showToast('All items given!')).catch(e => showToast(e.message)); setShowHostMenu(false); }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 rounded text-xs text-purple-400"
+                    >
+                      🧪 Give All Items
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -194,9 +292,9 @@ export default function GameScreen({ showResults = false }) {
         </div>
 
         {/* Timer */}
-        <div className={`glass rounded-lg px-2 py-1 ${isCriticalRound ? 'border border-red-500' : ''}`}>
-          <div className="text-[10px] text-white/40">Time</div>
-          <div className={`font-mono font-bold text-sm ${isCriticalRound ? 'timer-critical' : ''}`}>
+        <div className={`glass rounded-lg px-2 py-1 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20' : isCriticalRound ? 'border border-red-500' : ''}`}>
+          <div className="text-[10px] text-white/40">{isBonusTime ? '⏰ Bonus' : 'Time'}</div>
+          <div className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
             {formatTime(roundTimeRemaining)}
           </div>
         </div>
@@ -244,33 +342,37 @@ export default function GameScreen({ showResults = false }) {
 
         {/* Solo view - Large grid centered (only for non-eliminated players) */}
         {!isEliminated && !showOtherPlayers && (
-          <div className="flex items-center justify-center">
+          <div className={`flex items-center justify-center ${hasFlip ? 'rotate-180' : ''}`}>
             <WordleGrid
               guesses={playerState?.guesses || []}
-              results={playerState?.results || []}
-              currentInput={currentInput}
+              results={hasInvisibleInk ? [] : (playerState?.results || [])}
+              currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
               isCurrentPlayer={true}
               playerName={currentPlayer?.name || 'You'}
               solved={playerState?.solved || false}
               score={playerState?.roundScore || 0}
               large={true}
+              revealedLetters={revealedLetters}
+              hideColors={hasInvisibleInk}
             />
           </div>
         )}
 
         {/* Multi-player view - Compact grids (only for non-eliminated players) */}
         {!isEliminated && showOtherPlayers && (
-          <div className="w-full">
+          <div className={`w-full ${hasFlip ? 'rotate-180' : ''}`}>
             {/* Your grid first */}
             <div className="flex justify-center mb-3">
               <WordleGrid
                 guesses={playerState?.guesses || []}
-                results={playerState?.results || []}
-                currentInput={currentInput}
+                results={hasInvisibleInk ? [] : (playerState?.results || [])}
+                currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
                 isCurrentPlayer={true}
                 playerName={currentPlayer?.name || 'You'}
                 solved={playerState?.solved || false}
                 score={playerState?.roundScore || 0}
+                revealedLetters={revealedLetters}
+                hideColors={hasInvisibleInk}
               />
             </div>
             {/* Other players */}
@@ -296,13 +398,13 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className="mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4">
+        <div className={`mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4 ${hasFlip ? 'rotate-180' : ''}`}>
           <div className="flex flex-col gap-1.5 items-center max-w-lg mx-auto">
-            {KEYBOARD_ROWS.map((row, rowIdx) => (
+            {displayKeyboard.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1.5 justify-center">
                 {row.map((key) => {
-                  // In hardcore mode, never show keyboard colors
-                  const status = isHardcore ? null : keyboardStatus[key];
+                  // In hardcore mode or amnesia effect, never show keyboard colors
+                  const status = (isHardcore || hasAmnesia) ? null : keyboardStatus[key];
                   const isWide = key === 'ENTER' || key === 'DEL';
                   return (
                     <button
@@ -312,13 +414,14 @@ export default function GameScreen({ showResults = false }) {
                         ${isWide ? 'px-3 sm:px-4 text-xs sm:text-sm' : 'w-9 sm:w-11 text-sm sm:text-base'}
                         h-12 sm:h-14 rounded-lg font-bold
                         transition-all active:scale-95
-                        ${status === 'correct' ? 'bg-wordle-green text-white' : ''}
-                        ${status === 'present' ? 'bg-wordle-yellow text-white' : ''}
-                        ${status === 'absent' ? 'bg-white/10 text-white/30' : ''}
-                        ${!status ? 'bg-white/20 text-white hover:bg-white/30' : ''}
+                        ${hasBlindfold ? 'bg-white/10 text-transparent' :
+                          status === 'correct' ? 'bg-wordle-green text-white' :
+                          status === 'present' ? 'bg-wordle-yellow text-white' :
+                          status === 'absent' ? 'bg-white/10 text-white/30' :
+                          'bg-white/20 text-white hover:bg-white/30'}
                       `}
                     >
-                      {key === 'DEL' ? '⌫' : key}
+                      {hasBlindfold ? (isWide ? '' : '') : (key === 'DEL' ? '⌫' : key)}
                     </button>
                   );
                 })}
@@ -482,6 +585,142 @@ export default function GameScreen({ showResults = false }) {
           </div>
         );
       })()}
+
+      {/* Floating Inventory Panel - starts from top, grows downward */}
+      {powerUpsEnabled && !showResults && !isEliminated && gameState.state === 'playing' && inventory.length > 0 && (
+        <div className="fixed right-[0.4rem] top-[6rem] flex flex-col gap-1 z-40 max-h-[70vh] overflow-y-auto">
+          {inventory.map((item, idx) => {
+            const info = ITEM_INFO[item.id];
+            const isPassive = info?.passive;
+            return (
+              <button
+                key={idx}
+                onClick={() => handleItemClick(item)}
+                disabled={currentPlayer?.usedItemThisRound && !isPassive}
+                title={`${info?.name || item.id}${isPassive ? ' (Passive)' : ''}`}
+                className={`
+                  w-[2.6rem] h-[2.6rem] rounded-lg text-lg
+                  flex items-center justify-center
+                  transition-all transform hover:scale-105 active:scale-95
+                  ${isPassive ? 'bg-blue-500/20' :
+                    info?.type === 'sabotage' ? 'bg-red-500/20 hover:bg-red-500/40' :
+                    'bg-green-500/20 hover:bg-green-500/40'}
+                  ${currentPlayer?.usedItemThisRound && !isPassive ? 'opacity-40 cursor-not-allowed' : ''}
+                  ${info?.legendary ? 'animate-pulse' : ''}
+                `}
+              >
+                {info?.emoji || '?'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+
+      {/* Target Picker Modal - Grid View */}
+      {showTargetPicker && selectedItem && (
+        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-3">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <span className="text-xs text-white/50">
+                {ITEM_INFO[selectedItem.id]?.emoji} {ITEM_INFO[selectedItem.id]?.name} · tap a player
+              </span>
+              <div className="text-[10px] text-white/30">{ITEM_INFO[selectedItem.id]?.desc}</div>
+            </div>
+            <button
+              onClick={() => { setShowTargetPicker(false); setSelectedItem(null); }}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto flex items-center justify-center">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl">
+              {otherPlayers.filter(p => !p.eliminated && !p.solved).map((player) => (
+                <button
+                  key={player.id}
+                  onClick={() => handleTargetSelect(player.id)}
+                  className="flex flex-col items-center hover:bg-red-500/10 rounded-lg p-2 transition-all group"
+                >
+                  <div className="text-xs font-medium mb-1 truncate w-full text-center group-hover:text-red-400">
+                    {player.name}
+                  </div>
+                  <div className="transform scale-[0.85] origin-top">
+                    <WordleGrid
+                      guesses={[]}
+                      results={[]}
+                      currentInput=""
+                      isCurrentPlayer={false}
+                      playerName=""
+                      solved={player.solved}
+                      score={player.roundScore}
+                      guessResults={player.guessResults || []}
+                    />
+                  </div>
+                </button>
+              ))}
+            </div>
+            {otherPlayers.filter(p => !p.eliminated && !p.solved).length === 0 && (
+              <div className="text-center text-white/40">No valid targets</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Letter Picker Modal */}
+      {showLetterPicker && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-2xl p-4 sm:p-6 max-w-md w-full animate-bounce-in">
+            <h3 className="text-xl font-bold mb-2 text-center">🎯 Letter Snipe</h3>
+            <p className="text-white/60 text-center mb-4">Pick a letter to check:</p>
+            <div className="grid grid-cols-7 sm:grid-cols-9 gap-2">
+              {LETTER_PICKER.map((letter) => (
+                <button
+                  key={letter}
+                  onClick={() => handleLetterSelect(letter)}
+                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white/20 hover:bg-white/30 font-bold transition-colors"
+                >
+                  {letter}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setShowLetterPicker(false); setSelectedItem(null); }}
+              className="w-full mt-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Item Notification - Centered, subtle */}
+      {itemNotification && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className={`animate-fade-in-out px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg
+            ${itemNotification.type === 'sabotaged' ? 'bg-red-500/90' :
+              itemNotification.type === 'blocked' ? 'bg-blue-500/90' :
+              'bg-black/70 backdrop-blur-sm'}
+          `}>
+            <span className="text-2xl">{itemNotification.emoji}</span>
+            <span className="text-sm text-white">{itemNotification.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Letter Snipe Result */}
+      {letterSnipeResult && (
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce-in
+          px-6 py-4 rounded-xl shadow-lg text-center
+          ${letterSnipeResult.isInWord ? 'bg-wordle-green/90' : 'bg-white/20'}
+        `}>
+          <div className="text-3xl font-bold mb-1">{letterSnipeResult.letter}</div>
+          <div className={letterSnipeResult.isInWord ? 'text-white' : 'text-white/60'}>
+            {letterSnipeResult.isInWord ? 'IS in the word!' : 'NOT in the word'}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

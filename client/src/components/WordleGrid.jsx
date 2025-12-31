@@ -10,7 +10,9 @@ export default function WordleGrid({
   solved = false,
   score = 0,
   guessResults = [],
-  large = false // Large mode for solo view
+  large = false, // Large mode for solo view
+  hideColors = false, // Hide colors for invisible ink effect
+  revealedLetters = {} // { position: letter } - revealed letters to show in current row
 }) {
   const rows = [];
 
@@ -26,15 +28,24 @@ export default function WordleGrid({
       let status = '';
       let animate = false;
 
-      if (guess && result) {
+      if (guess && result && !hideColors) {
         letter = guess[j];
         status = result[j]?.status || '';
         animate = true;
-      } else if (otherResult && otherResult[j]) {
+      } else if (guess && hideColors) {
+        // Show dots instead of letters when hiding colors
+        letter = '•';
+      } else if (otherResult && otherResult[j] && !hideColors) {
         status = otherResult[j];
         animate = true;
-      } else if (isCurrentRow && currentInput[j]) {
-        letter = currentInput[j];
+      } else if (isCurrentRow) {
+        // Check for revealed letter at this position first
+        if (revealedLetters[j]) {
+          letter = revealedLetters[j];
+          status = 'correct'; // Show as green
+        } else if (currentInput[j]) {
+          letter = currentInput[j];
+        }
       }
 
       // Cell size based on large prop

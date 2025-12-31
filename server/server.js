@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GameManager } from './game.js';
+import { GameManager, ITEMS, getRandomDrop, getSabotageDuration } from './game.js';
 import { isValidWord, getRandomWord } from './words.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -157,12 +157,34 @@ function startRound(roomCode, customWord = null) {
   const roundTimer = setInterval(() => {
     const remaining = room.getRoundTimeRemaining();
     const guessRemaining = room.getGuessTimeRemaining();
-    
-    io.to(roomCode).emit('timerUpdate', {
-      roundTimeRemaining: remaining,
-      guessTimeRemaining: guessRemaining
-    });
-    
+    const baseTimeUp = remaining <= 0;
+
+    // Clean up expired sabotage effects
+    if (room.settings.powerUpsEnabled) {
+      room.cleanupExpiredEffects();
+    }
+
+    // Send timer updates to all players
+    for (const [playerId, player] of room.players) {
+      const playerSocket = io.sockets.sockets.get(playerId);
+      if (playerSocket) {
+        // Calculate player's personal time (base time + any bonus time from Time Warp)
+        const bonusTime = player.bonusTime || 0;
+        let playerTimeRemaining = remaining + bonusTime;
+
+        // When base time is up, start decrementing bonus time
+        if (remaining <= 0 && bonusTime > 0) {
+          player.bonusTime = Math.max(0, bonusTime - 1000);
+        }
+
+        playerSocket.emit('timerUpdate', {
+          roundTimeRemaining: playerTimeRemaining,
+          guessTimeRemaining: guessRemaining,
+          isBonusTime: bonusTime > 0
+        });
+      }
+    }
+
     // Check if round is over
     if (room.isRoundOver()) {
       clearInterval(roundTimer);
@@ -222,11 +244,151 @@ function endRound(roomCode) {
     }
   }
 
+  // ============================================
+  // EARN SYSTEM - Process drops for power-ups
+  // ============================================
+  const drops = {}; // playerId -> { item, trigger }
+
+  if (room.settings.powerUpsEnabled) {
+    const activePlayers = room.getActivePlayers();
+    const totalPlayers = activePlayers.length;
+
+    // Sort players by round score to determine positions
+    const sortedByScore = [...activePlayers].sort((a, b) => b.roundScore - a.roundScore);
+
+    // Find first solver
+    let firstSolver = null;
+    let firstSolveTime = Infinity;
+    for (const player of activePlayers) {
+      if (player.solved && player.solvedAt && player.solvedAt < firstSolveTime) {
+        firstSolveTime = player.solvedAt;
+        firstSolver = player;
+      }
+    }
+
+    for (const player of activePlayers) {
+      const position = room.getPlayerPosition(player.id);
+      const prevPosition = player.lastRoundPosition || position;
+
+      // Calculate solve time in seconds
+      const solveTimeSeconds = player.solvedAt
+        ? Math.floor((player.solvedAt - room.roundStartTime) / 1000)
+        : null;
+
+      // Track position for next round's Comeback Drop
+      player.lastRoundPosition = position;
+
+      // Track failed rounds for Mercy Drop
+      if (!player.solved) {
+        player.failedRoundsStreak = (player.failedRoundsStreak || 0) + 1;
+      } else {
+        player.failedRoundsStreak = 0;
+      }
+
+      let earnedDrop = false;
+      let trigger = null;
+
+      // SKILL-BASED TRIGGERS (with cooldown)
+      if (!player.earnCooldown) {
+        // 1. First to Solve (100%)
+        if (firstSolver && firstSolver.id === player.id) {
+          earnedDrop = true;
+          trigger = 'first_solve';
+          player.earnCooldown = true;
+        }
+        // 2. Solve in ≤2 guesses (50% chance - user requested)
+        else if (player.solved && player.solvedInGuesses <= 2 && Math.random() < 0.5) {
+          earnedDrop = true;
+          trigger = 'efficiency';
+          player.earnCooldown = true;
+        }
+        // 3. Speed Demon - under 20 seconds (100%)
+        else if (player.solved && solveTimeSeconds !== null && solveTimeSeconds < 20) {
+          earnedDrop = true;
+          trigger = 'speed_demon';
+          player.earnCooldown = true;
+        }
+      } else {
+        // Reset cooldown for next round
+        player.earnCooldown = false;
+      }
+
+      // CLUTCH TRIGGERS (no cooldown)
+      // 4. Clutch Solver - 6th guess AND ≤10s remaining (50%)
+      if (!earnedDrop && player.solved && player.solvedInGuesses === 6) {
+        const timeRemainingAtSolve = room.settings.roundTimeSeconds * 1000 - (player.solvedAt - room.roundStartTime);
+        if (timeRemainingAtSolve <= 10000 && Math.random() < 0.5) {
+          earnedDrop = true;
+          trigger = 'clutch';
+        }
+      }
+
+      // UNDERDOG TRIGGERS (no cooldown)
+      // 6. Mercy Drop - failed 2+ consecutive rounds (100%)
+      if (!earnedDrop && player.failedRoundsStreak >= 2) {
+        earnedDrop = true;
+        trigger = 'mercy';
+      }
+      // 7. Comeback Drop - jump 3+ positions (50%)
+      if (!earnedDrop && prevPosition - position >= 3 && Math.random() < 0.5) {
+        earnedDrop = true;
+        trigger = 'comeback';
+      }
+
+      // Give the drop
+      if (earnedDrop) {
+        const item = getRandomDrop(position, totalPlayers);
+        if (item) {
+          room.addItemToInventory(player.id, item);
+          drops[player.id] = { item, trigger };
+        }
+      }
+    }
+
+    // 5. LUCKY DROP - random rounds give everyone who solved a drop
+    // Pick 1-2 random "lucky rounds" per game (we'll check if this is one)
+    if (!room.luckyRounds) {
+      // Initialize lucky rounds on first round
+      const totalRounds = room.settings.rounds;
+      room.luckyRounds = new Set();
+      const numLucky = totalRounds >= 5 ? 2 : 1;
+      while (room.luckyRounds.size < numLucky) {
+        room.luckyRounds.add(Math.floor(Math.random() * totalRounds) + 1);
+      }
+    }
+
+    if (room.luckyRounds.has(room.currentRound)) {
+      for (const player of activePlayers) {
+        if (player.solved && !drops[player.id]) {
+          const position = room.getPlayerPosition(player.id);
+          const item = getRandomDrop(position, totalPlayers);
+          if (item) {
+            room.addItemToInventory(player.id, item);
+            drops[player.id] = { item, trigger: 'lucky' };
+          }
+        }
+      }
+    }
+  }
+
+  // Send item notifications to players who received items
+  for (const [playerId, dropInfo] of Object.entries(drops)) {
+    const socket = io.sockets.sockets.get(playerId);
+    if (socket && dropInfo.item) {
+      socket.emit('itemReceived', { item: dropInfo.item, trigger: dropInfo.trigger });
+      const player = room.players.get(playerId);
+      if (player) {
+        socket.emit('inventoryUpdate', { inventory: player.inventory });
+      }
+    }
+  }
+
   // Send full results including the word and detailed stats
   io.to(roomCode).emit('roundEnd', {
     ...roundResult,
     word: room.targetWord,
     playerStats,
+    drops, // Include drop info so clients can show animations
     gameState: room.getPublicState()
   });
 
@@ -798,6 +960,226 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ============================================
+  // POWER-UPS & SABOTAGES HANDLERS
+  // ============================================
+
+  // Use an item (power-up or sabotage)
+  socket.on('useItem', ({ itemId, targetId }, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'playing') {
+      if (callback) callback({ success: false, error: 'Game not in progress' });
+      return;
+    }
+
+    if (!room.settings.powerUpsEnabled) {
+      if (callback) callback({ success: false, error: 'Power-ups not enabled' });
+      return;
+    }
+
+    const result = room.useItem(socket.id, itemId, targetId);
+
+    if (result.success) {
+      // Handle Time Warp - extend player's personal timer
+      if (result.timeBonus) {
+        room.addPlayerBonusTime(socket.id, result.timeBonus);
+      }
+
+      // Send updated inventory to user
+      const player = room.players.get(socket.id);
+      if (player) {
+        socket.emit('inventoryUpdate', { inventory: player.inventory });
+      }
+
+      // Notify only the user who used the item (not blocked)
+      if (!result.blocked) {
+        socket.emit('itemUsed', {
+          fromPlayer: socket.id,
+          item: result.item,
+          targetPlayer: targetId
+        });
+      }
+
+      // If sabotage, send active effect and notification to target
+      if (result.item?.type === 'sabotage' && targetId && !result.blocked) {
+        const targetSocket = io.sockets.sockets.get(targetId);
+        if (targetSocket) {
+          // Notify target they've been sabotaged
+          targetSocket.emit('sabotaged', {
+            item: result.item,
+            fromPlayer: room.players.get(socket.id)?.name || 'Someone'
+          });
+
+          // For amnesia (permanent), send special event to clear keyboard
+          if (itemId === 'amnesia') {
+            targetSocket.emit('amnesiaClearKeyboard');
+            targetSocket.emit('activeEffect', {
+              effect: itemId,
+              duration: 999999999, // Very long duration for permanent
+              data: null
+            });
+          } else if (result.duration) {
+            targetSocket.emit('activeEffect', {
+              effect: itemId,
+              duration: result.duration,
+              data: result.shuffledKeys ? { shuffledKeys: result.shuffledKeys } : null
+            });
+          }
+        }
+      }
+
+      // If shield blocked, notify both players
+      if (result.blocked) {
+        // Notify attacker their attack was blocked
+        socket.emit('shieldBlocked', {
+          targetPlayer: targetId,
+          item: result.item
+        });
+        // Notify target their shield protected them
+        const targetSocket = io.sockets.sockets.get(targetId);
+        if (targetSocket) {
+          const attackerName = room.players.get(socket.id)?.name || 'Someone';
+          targetSocket.emit('shieldProtected', {
+            attacker: attackerName,
+            item: result.item
+          });
+          // Update target's inventory (shield was consumed)
+          const targetPlayer = room.players.get(targetId);
+          if (targetPlayer) {
+            targetSocket.emit('inventoryUpdate', { inventory: targetPlayer.inventory });
+          }
+        }
+      }
+
+      // If letter revealed, send to user
+      if (result.revealedLetter) {
+        socket.emit('letterRevealed', result.revealedLetter);
+      }
+
+      // Send updated states
+      io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+
+      // Send updated player states (especially for identity theft swaps)
+      for (const [playerId] of room.players) {
+        const playerSocket = io.sockets.sockets.get(playerId);
+        if (playerSocket) {
+          playerSocket.emit('playerState', room.getPlayerState(playerId));
+        }
+      }
+
+      if (callback) callback({ success: true, ...result });
+    } else {
+      if (callback) callback(result);
+    }
+  });
+
+  // Letter Snipe - check if a letter is in the word
+  socket.on('letterSnipe', ({ letter }, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'playing') {
+      if (callback) callback({ success: false, error: 'Game not in progress' });
+      return;
+    }
+
+    const player = room.players.get(socket.id);
+    if (!player) {
+      if (callback) callback({ success: false, error: 'Player not found' });
+      return;
+    }
+
+    // Check if player has Letter Snipe in inventory
+    const itemIndex = player.inventory.findIndex(i => i.id === 'letter_snipe');
+    if (itemIndex === -1) {
+      if (callback) callback({ success: false, error: 'You do not have Letter Snipe' });
+      return;
+    }
+
+    if (player.usedItemThisRound) {
+      if (callback) callback({ success: false, error: 'Already used an item this round' });
+      return;
+    }
+
+    // Use the item
+    player.inventory.splice(itemIndex, 1);
+    player.usedItemThisRound = true;
+
+    const result = room.letterSnipe(socket.id, letter);
+
+    // Send inventory update to user
+    socket.emit('inventoryUpdate', { inventory: player.inventory });
+
+    // Send result to user
+    socket.emit('letterSnipeResult', {
+      letter: result.letter,
+      isInWord: result.isInWord
+    });
+
+    // Notify all players
+    io.to(roomCode).emit('itemUsed', {
+      fromPlayer: socket.id,
+      item: { id: 'letter_snipe', name: 'Letter Snipe', emoji: '🎯', type: 'powerup' },
+      targetPlayer: null
+    });
+
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+
+    if (callback) callback(result);
+  });
+
+  // DEBUG: Give all items to all players for testing
+  socket.on('debugGiveAllItems', (callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room) {
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    // All item IDs
+    const allItems = [
+      { id: 'letter_snipe', type: 'powerup', name: 'Letter Snipe', emoji: '🎯' },
+      { id: 'shield', type: 'powerup', name: 'Shield', emoji: '🛡️' },
+      { id: 'letter_reveal', type: 'powerup', name: 'Letter Reveal', emoji: '✨' },
+      { id: 'time_warp', type: 'powerup', name: 'Time Warp', emoji: '⏰' },
+      { id: 'blindfold', type: 'sabotage', name: 'Blindfold', emoji: '🙈' },
+      { id: 'flip_it', type: 'sabotage', name: 'Flip It', emoji: '🙃' },
+      { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', emoji: '🔀' },
+      { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', emoji: '👻' },
+      { id: 'amnesia', type: 'sabotage', name: 'Amnesia', emoji: '🧠' },
+      { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', emoji: '🔄' }
+    ];
+
+    // Give all items to all players (replace inventory)
+    for (const [playerId, player] of room.players) {
+      player.inventory = [...allItems];
+      player.usedItemThisRound = false; // Allow using items
+      const playerSocket = io.sockets.sockets.get(playerId);
+      if (playerSocket) {
+        playerSocket.emit('inventoryUpdate', { inventory: player.inventory });
+      }
+    }
+
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+    if (callback) callback({ success: true, message: 'All items given to all players' });
+  });
+
   // Start next round
   socket.on('nextRound', ({ customWord } = {}, callback) => {
     const roomCode = playerRooms.get(socket.id);

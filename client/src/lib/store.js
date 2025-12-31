@@ -30,9 +30,17 @@ export const useGameStore = create((set, get) => ({
   roundEndData: null,
   nextRoundCountdown: null,
 
+  // Power-ups & Sabotages
+  itemNotification: null, // { type, message, emoji }
+  revealedLetters: {}, // { position: letter } from Letter Reveal - persists for round
+  letterSnipeResult: null, // { letter, isInWord }
+  inventory: [], // Player's current items
+  activeEffects: [], // { effect, expiresAt, data }
+
   // Timers
   roundTimeRemaining: 0,
   guessTimeRemaining: 0,
+  isBonusTime: false,
   
   // Actions
   setSocket: (socket) => set({ socket }),
@@ -98,9 +106,47 @@ export const useGameStore = create((set, get) => ({
   setRoundEndData: (data) => set({ roundEndData: data }),
   setNextRoundCountdown: (seconds) => set({ nextRoundCountdown: seconds }),
 
-  setTimers: (roundTime, guessTime) => set({
+  // Power-ups & Sabotages
+  setItemNotification: (notification) => {
+    set({ itemNotification: notification });
+    if (notification) {
+      setTimeout(() => set({ itemNotification: null }), 3000);
+    }
+  },
+  addRevealedLetter: (data) => {
+    if (data && data.position !== undefined && data.letter) {
+      set((state) => ({
+        revealedLetters: { ...state.revealedLetters, [data.position - 1]: data.letter } // Convert 1-indexed to 0-indexed
+      }));
+    }
+  },
+  setLetterSnipeResult: (result) => {
+    set({ letterSnipeResult: result });
+    if (result) {
+      setTimeout(() => set({ letterSnipeResult: null }), 3000);
+    }
+  },
+  setInventory: (inventory) => set({ inventory }),
+  addActiveEffect: ({ effect, duration, data }) => {
+    const expiresAt = Date.now() + duration;
+    set((state) => ({
+      activeEffects: [...state.activeEffects.filter(e => e.effect !== effect), { effect, expiresAt, data }]
+    }));
+  },
+  removeActiveEffect: (effect) => {
+    set((state) => ({
+      activeEffects: state.activeEffects.filter(e => e.effect !== effect)
+    }));
+  },
+  hasActiveEffect: (effect) => {
+    const state = get();
+    return state.activeEffects.some(e => e.effect === effect && e.expiresAt > Date.now());
+  },
+
+  setTimers: (roundTime, guessTime, isBonusTime = false) => set({
     roundTimeRemaining: roundTime,
-    guessTimeRemaining: guessTime
+    guessTimeRemaining: guessTime,
+    isBonusTime
   }),
   
   // Reset for new round
@@ -108,7 +154,11 @@ export const useGameStore = create((set, get) => ({
     currentInput: '',
     keyboardStatus: {},
     roundEndData: null,
-    nextRoundCountdown: null
+    nextRoundCountdown: null,
+    revealedLetters: {},
+    letterSnipeResult: null,
+    itemNotification: null,
+    activeEffects: []
   }),
   
   // Full reset
@@ -125,6 +175,11 @@ export const useGameStore = create((set, get) => ({
     showCountdown: false,
     countdownValue: 5,
     roundTimeRemaining: 0,
-    guessTimeRemaining: 0
+    guessTimeRemaining: 0,
+    inventory: [],
+    activeEffects: [],
+    itemNotification: null,
+    revealedLetters: {},
+    letterSnipeResult: null
   })
 }));

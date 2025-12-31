@@ -1,5 +1,75 @@
 import { getRandomWord, isValidWord } from './words.js';
 
+// ============================================
+// POWER-UPS & SABOTAGES SYSTEM
+// ============================================
+
+// Item definitions
+export const ITEMS = {
+  // Power-ups (help yourself)
+  LETTER_SNIPE: { id: 'letter_snipe', type: 'powerup', name: 'Letter Snipe', rarity: 'common', emoji: '🎯' },
+  SHIELD: { id: 'shield', type: 'powerup', name: 'Shield', rarity: 'common', emoji: '🛡️' },
+  LETTER_REVEAL: { id: 'letter_reveal', type: 'powerup', name: 'Letter Reveal', rarity: 'uncommon', emoji: '✨' },
+  TIME_WARP: { id: 'time_warp', type: 'powerup', name: 'Time Warp', rarity: 'uncommon', emoji: '⏰' },
+
+  // Sabotages (hurt opponents) - Duration: 35% of round time
+  BLINDFOLD: { id: 'blindfold', type: 'sabotage', name: 'Blindfold', rarity: 'common', emoji: '🙈' },
+  FLIP_IT: { id: 'flip_it', type: 'sabotage', name: 'Flip It', rarity: 'common', emoji: '🙃' },
+  KEYBOARD_SHUFFLE: { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', rarity: 'uncommon', emoji: '🔀' },
+  INVISIBLE_INK: { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', rarity: 'uncommon', emoji: '👻' },
+  AMNESIA: { id: 'amnesia', type: 'sabotage', name: 'Amnesia', rarity: 'rare', emoji: '🧠', permanent: true },
+  IDENTITY_THEFT: { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', rarity: 'legendary', emoji: '🔄', instant: true }
+};
+
+// Rarity pools for drops
+export const RARITY_POOLS = {
+  common: ['letter_snipe', 'shield', 'blindfold', 'flip_it'],
+  uncommon: ['letter_reveal', 'time_warp', 'keyboard_shuffle', 'invisible_ink'],
+  rare: ['amnesia'],
+  legendary: ['identity_theft']
+};
+
+// Get random item based on player position (Mario Kart style)
+export function getRandomDrop(playerPosition, totalPlayers, isPowerUpOnly = false, isSabotageOnly = false) {
+  const isLeader = playerPosition <= 2;
+  const isUnderdog = playerPosition >= totalPlayers - 1;
+
+  let eligibleItems = [];
+
+  if (isPowerUpOnly || (!isSabotageOnly && !isLeader)) {
+    // Leaders can't get power-ups, others can
+    if (!isLeader) {
+      eligibleItems.push(...RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup'));
+      if (isUnderdog) {
+        eligibleItems.push(...RARITY_POOLS.uncommon.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup'));
+      }
+    }
+  }
+
+  if (isSabotageOnly || !isPowerUpOnly) {
+    // Everyone can get sabotages
+    eligibleItems.push(...RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage'));
+    eligibleItems.push(...RARITY_POOLS.uncommon.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage'));
+    if (isUnderdog) {
+      eligibleItems.push(...RARITY_POOLS.rare);
+      eligibleItems.push(...RARITY_POOLS.legendary);
+    }
+  }
+
+  if (eligibleItems.length === 0) {
+    // Fallback: give a common sabotage
+    eligibleItems = RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage');
+  }
+
+  const randomId = eligibleItems[Math.floor(Math.random() * eligibleItems.length)];
+  return ITEMS[randomId.toUpperCase()];
+}
+
+// Calculate sabotage duration (35% of round time)
+export function getSabotageDuration(roundTimeSeconds) {
+  return Math.floor(roundTimeSeconds * 0.35 * 1000); // Return in milliseconds
+}
+
 // Scoring System:
 // Base points for solving: 1000
 // Guess bonus: (7 - guessNumber) * 150 (fewer guesses = more points)
@@ -85,6 +155,7 @@ export class GameRoom {
       mirrorMatch: settings.mirrorMatch || false, // Everyone starts with same opener
       hardcoreMode: settings.hardcoreMode || false, // No keyboard color hints
       freshOpenersOnly: settings.freshOpenersOnly || false, // Can't reuse openers from previous rounds
+      powerUpsEnabled: settings.powerUpsEnabled || false, // Enable power-ups and sabotages
       ...settings
     };
     this.mirrorOpener = null; // The shared opener word for mirror match
@@ -124,7 +195,15 @@ export class GameRoom {
       eliminatedRound: null,
       placement: null,
       // Fresh Openers tracking
-      usedOpeners: []
+      usedOpeners: [],
+      // Power-ups & Sabotages
+      inventory: [], // Max 3 items: { type, id, rarity }
+      usedItemThisRound: false,
+      hasShield: false, // Shield power-up active
+      activeEffects: [], // Active sabotage effects: { type, expiresAt, data }
+      earnCooldown: false, // Skill-based earn cooldown
+      failedRoundsStreak: 0, // For Mercy Drop
+      lastRoundPosition: null // For Comeback Drop
     });
     return true;
   }
@@ -194,6 +273,11 @@ export class GameRoom {
         player.currentGuess = '';
         player.roundScore = 0;
         player.ready = false;
+        // Reset item usage for new round
+        player.usedItemThisRound = false;
+        player.activeEffects = [];
+        player.bonusTime = 0; // Reset Time Warp bonus
+        player.hasShield = false; // Reset shield each round
       }
     }
 
@@ -310,6 +394,20 @@ export class GameRoom {
     const remaining = (this.settings.roundTimeSeconds * 1000) - elapsed;
     return Math.max(0, remaining);
   }
+
+  getPlayerTimeRemaining(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return 0;
+    const baseRemaining = this.getRoundTimeRemaining();
+    return baseRemaining + (player.bonusTime || 0);
+  }
+
+  addPlayerBonusTime(playerId, ms) {
+    const player = this.players.get(playerId);
+    if (player) {
+      player.bonusTime = (player.bonusTime || 0) + ms;
+    }
+  }
   
   getGuessTimeRemaining() {
     if (!this.guessDeadline) return 0;
@@ -318,14 +416,24 @@ export class GameRoom {
   }
   
   isRoundOver() {
-    // Round ends if time is up
-    if (this.getRoundTimeRemaining() <= 0) return true;
-
-    // Round ends if all active (non-eliminated) players solved or used all guesses
     const activePlayers = this.getActivePlayers();
+    const baseTimeUp = this.getRoundTimeRemaining() <= 0;
+
+    // Check each active player
     for (const player of activePlayers) {
+      // Player still playing if they haven't solved and have guesses left
       if (!player.solved && player.guesses.length < 6) {
-        return false;
+        // If base time is up, check if player has bonus time
+        if (baseTimeUp) {
+          const playerTimeRemaining = (player.bonusTime || 0);
+          if (playerTimeRemaining > 0) {
+            // Player still has bonus time, round continues for them
+            return false;
+          }
+        } else {
+          // Base time still running
+          return false;
+        }
       }
     }
     return true;
@@ -474,7 +582,15 @@ export class GameRoom {
         // Only show results (colors), not the actual letters guessed
         lastGuessColors: player.results.length > 0
           ? countColors(player.results[player.results.length - 1])
-          : null
+          : null,
+        // Power-ups & Sabotages
+        inventoryCount: player.inventory.length,
+        hasShield: player.hasShield,
+        activeEffects: player.activeEffects.map(e => ({
+          type: e.type,
+          expiresAt: e.expiresAt,
+          permanent: e.permanent
+        }))
       };
     }
 
@@ -529,11 +645,222 @@ export class GameRoom {
   getPlayerState(playerId) {
     const player = this.players.get(playerId);
     if (!player) return null;
-    
+
     return {
       ...player,
       targetWord: this.state === 'roundEnd' || this.state === 'gameEnd' ? this.targetWord : null
     };
+  }
+
+  // ============================================
+  // POWER-UPS & SABOTAGES METHODS
+  // ============================================
+
+  addItemToInventory(playerId, item) {
+    const player = this.players.get(playerId);
+    if (!player) return { success: false, error: 'Player not found' };
+
+    // No max limit - items accumulate
+    player.inventory.push({
+      id: item.id,
+      type: item.type,
+      name: item.name,
+      rarity: item.rarity,
+      emoji: item.emoji
+    });
+
+    return { success: true, item };
+  }
+
+  useItem(playerId, itemId, targetId = null) {
+    const player = this.players.get(playerId);
+    if (!player) return { success: false, error: 'Player not found' };
+    if (player.usedItemThisRound) return { success: false, error: 'Already used an item this round' };
+    if (player.eliminated) return { success: false, error: 'Eliminated players cannot use items' };
+
+    const itemIndex = player.inventory.findIndex(i => i.id === itemId);
+    if (itemIndex === -1) return { success: false, error: 'Item not in inventory' };
+
+    const item = player.inventory[itemIndex];
+    const itemDef = ITEMS[itemId.toUpperCase()];
+
+    // Validate target for sabotages
+    if (item.type === 'sabotage' && !targetId) {
+      return { success: false, error: 'Sabotage requires a target' };
+    }
+
+    let result = { success: true, item, targetId };
+
+    // Handle sabotages targeting other players
+    if (item.type === 'sabotage' && targetId) {
+      const target = this.players.get(targetId);
+      if (!target) return { success: false, error: 'Target not found' };
+      if (target.eliminated) return { success: false, error: 'Cannot target eliminated players' };
+      if (targetId === playerId) return { success: false, error: 'Cannot target yourself' };
+
+      // Check for shield (auto-activates from inventory)
+      const shieldIndex = target.inventory.findIndex(i => i.id === 'shield');
+      if (target.hasShield || shieldIndex !== -1) {
+        // Remove shield from inventory if it was there
+        if (shieldIndex !== -1) {
+          target.inventory.splice(shieldIndex, 1);
+        }
+        target.hasShield = false;
+        result.blocked = true;
+        result.blockedBy = target.name;
+      } else {
+        // Apply sabotage effect
+        const duration = itemDef.permanent ? null : getSabotageDuration(this.settings.roundTimeSeconds);
+        const expiresAt = duration ? Date.now() + duration : null;
+
+        if (itemId === 'identity_theft') {
+          // Swap progress between players
+          result.swapData = this.swapPlayerProgress(playerId, targetId);
+        } else if (itemId === 'keyboard_shuffle') {
+          // Generate shuffled keyboard
+          const letters = 'QWERTYUIOPASDFGHJKLZXCVBNM'.split('');
+          const shuffled = [...letters].sort(() => Math.random() - 0.5);
+          result.shuffledKeys = shuffled;
+          target.activeEffects.push({
+            type: itemId,
+            expiresAt,
+            fromPlayer: player.name,
+            data: { shuffledKeys: shuffled }
+          });
+        } else {
+          target.activeEffects.push({
+            type: itemId,
+            expiresAt,
+            fromPlayer: player.name,
+            permanent: itemDef.permanent || false
+          });
+        }
+
+        result.duration = duration;
+        result.targetName = target.name;
+      }
+    }
+
+    // Handle power-ups
+    if (item.type === 'powerup') {
+      if (itemId === 'shield') {
+        player.hasShield = true;
+        result.activated = true;
+      } else if (itemId === 'time_warp') {
+        // Add 30 seconds - handled in server.js
+        result.timeBonus = 30000;
+      } else if (itemId === 'letter_reveal') {
+        // Reveal a random correct letter position
+        result.revealedLetter = this.revealRandomLetter(playerId);
+      }
+      // letter_snipe is handled separately via letterSnipe method
+    }
+
+    // Remove item from inventory and mark as used
+    player.inventory.splice(itemIndex, 1);
+    player.usedItemThisRound = true;
+
+    return result;
+  }
+
+  letterSnipe(playerId, letter) {
+    const player = this.players.get(playerId);
+    if (!player) return { success: false, error: 'Player not found' };
+
+    const upperLetter = letter.toUpperCase();
+    const isInWord = this.targetWord.toUpperCase().includes(upperLetter);
+
+    return {
+      success: true,
+      letter: upperLetter,
+      isInWord
+    };
+  }
+
+  revealRandomLetter(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return null;
+
+    const target = this.targetWord.toUpperCase();
+
+    // Find positions not yet revealed (green) by the player
+    const revealedPositions = new Set();
+    for (const result of player.results) {
+      result.forEach((cell, idx) => {
+        if (cell.status === 'correct') revealedPositions.add(idx);
+      });
+    }
+
+    // Get unrevealed positions
+    const unrevealedPositions = [];
+    for (let i = 0; i < 5; i++) {
+      if (!revealedPositions.has(i)) {
+        unrevealedPositions.push(i);
+      }
+    }
+
+    if (unrevealedPositions.length === 0) return null;
+
+    const randomPos = unrevealedPositions[Math.floor(Math.random() * unrevealedPositions.length)];
+    return {
+      position: randomPos + 1, // 1-indexed for display
+      letter: target[randomPos]
+    };
+  }
+
+  swapPlayerProgress(player1Id, player2Id) {
+    const p1 = this.players.get(player1Id);
+    const p2 = this.players.get(player2Id);
+
+    if (!p1 || !p2) return null;
+
+    // Swap guesses and results
+    const tempGuesses = [...p1.guesses];
+    const tempResults = [...p1.results];
+    const tempSolved = p1.solved;
+    const tempSolvedAt = p1.solvedAt;
+    const tempSolvedInGuesses = p1.solvedInGuesses;
+    const tempRoundScore = p1.roundScore;
+
+    p1.guesses = [...p2.guesses];
+    p1.results = [...p2.results];
+    p1.solved = p2.solved;
+    p1.solvedAt = p2.solvedAt;
+    p1.solvedInGuesses = p2.solvedInGuesses;
+    p1.roundScore = p2.roundScore;
+
+    p2.guesses = tempGuesses;
+    p2.results = tempResults;
+    p2.solved = tempSolved;
+    p2.solvedAt = tempSolvedAt;
+    p2.solvedInGuesses = tempSolvedInGuesses;
+    p2.roundScore = tempRoundScore;
+
+    return {
+      player1: { id: player1Id, newGuessCount: p1.guesses.length },
+      player2: { id: player2Id, newGuessCount: p2.guesses.length }
+    };
+  }
+
+  // Clean up expired effects
+  cleanupExpiredEffects() {
+    const now = Date.now();
+    for (const player of this.players.values()) {
+      player.activeEffects = player.activeEffects.filter(effect => {
+        if (effect.permanent) return true;
+        return effect.expiresAt > now;
+      });
+    }
+  }
+
+  // Get player's current position in standings
+  getPlayerPosition(playerId) {
+    const sorted = Array.from(this.players.values())
+      .filter(p => !p.eliminated)
+      .sort((a, b) => b.totalScore - a.totalScore);
+
+    const idx = sorted.findIndex(p => p.id === playerId);
+    return idx === -1 ? sorted.length : idx + 1;
   }
 }
 

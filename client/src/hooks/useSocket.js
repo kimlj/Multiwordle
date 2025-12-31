@@ -166,8 +166,8 @@ export function useSocket() {
         showToast(`Round ${data.round} - GO!`, 1500);
       });
 
-      socket.on('timerUpdate', ({ roundTimeRemaining, guessTimeRemaining }) => {
-        setTimers(roundTimeRemaining, guessTimeRemaining);
+      socket.on('timerUpdate', ({ roundTimeRemaining, guessTimeRemaining, isBonusTime }) => {
+        setTimers(roundTimeRemaining, guessTimeRemaining, isBonusTime);
       });
 
       socket.on('guessSubmitted', ({ playerId, guessNumber, colors, solved, gameState }) => {
@@ -199,6 +199,83 @@ export function useSocket() {
         resetForNewRound();
         resetKeyboardStatus();
         showToast('Game reset! Ready for a new game.', 2000);
+      });
+
+      // Power-ups & Sabotages
+      socket.on('itemReceived', ({ item, trigger }) => {
+        const store = useGameStore.getState();
+        store.setItemNotification({
+          type: 'received',
+          message: `Got ${item.name}!`,
+          emoji: item.emoji,
+          trigger
+        });
+      });
+
+      // When you use an item (only sent to you)
+      socket.on('itemUsed', ({ item }) => {
+        useGameStore.getState().setItemNotification({
+          type: 'used',
+          message: `${item.name} used!`,
+          emoji: item.emoji
+        });
+      });
+
+      // When you get sabotaged (only sent to target)
+      socket.on('sabotaged', ({ item, fromPlayer }) => {
+        useGameStore.getState().setItemNotification({
+          type: 'sabotaged',
+          message: `${item.name} from ${fromPlayer}!`,
+          emoji: item.emoji
+        });
+      });
+
+      socket.on('letterSnipeResult', ({ letter, isInWord }) => {
+        useGameStore.getState().setLetterSnipeResult({ letter, isInWord });
+      });
+
+      socket.on('letterRevealed', ({ letter, position }) => {
+        useGameStore.getState().addRevealedLetter({ letter, position });
+        useGameStore.getState().showToast(`Position ${position}: ${letter}`, 2000);
+      });
+
+      socket.on('activeEffect', ({ effect, duration, data }) => {
+        useGameStore.getState().addActiveEffect({ effect, duration, data });
+      });
+
+      socket.on('effectExpired', ({ effect }) => {
+        useGameStore.getState().removeActiveEffect(effect);
+      });
+
+      socket.on('amnesiaClearKeyboard', () => {
+        // Permanently clear keyboard colors
+        useGameStore.getState().resetKeyboardStatus();
+      });
+
+      socket.on('shieldBlocked', ({ targetPlayer, item }) => {
+        const store = useGameStore.getState();
+        // Only show if this socket is the attacker (should always be true, but safeguard)
+        if (socket.id === store.playerId || !store.playerId) {
+          const targetName = store.gameState?.players[targetPlayer]?.name || 'Someone';
+          store.setItemNotification({
+            type: 'blocked',
+            message: `${targetName}'s shield blocked!`,
+            emoji: '🛡️'
+          });
+        }
+      });
+
+      socket.on('shieldProtected', ({ attacker, item }) => {
+        // This event only comes to the target, show notification
+        useGameStore.getState().setItemNotification({
+          type: 'received',
+          message: `Shield blocked ${attacker}'s ${item.name}!`,
+          emoji: '🛡️'
+        });
+      });
+
+      socket.on('inventoryUpdate', ({ inventory }) => {
+        useGameStore.getState().setInventory(inventory);
       });
 
       socket.on('playerJoined', ({ playerName, gameState }) => {
@@ -422,6 +499,42 @@ export function useSocket() {
     });
   }, []);
 
+  const useItem = useCallback((itemId, targetId = null) => {
+    return new Promise((resolve, reject) => {
+      socket.emit('useItem', { itemId, targetId }, (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to use item'));
+        }
+      });
+    });
+  }, []);
+
+  const letterSnipe = useCallback((letter) => {
+    return new Promise((resolve, reject) => {
+      socket.emit('letterSnipe', { letter }, (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to use Letter Snipe'));
+        }
+      });
+    });
+  }, []);
+
+  const debugGiveAllItems = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      socket.emit('debugGiveAllItems', (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to give items'));
+        }
+      });
+    });
+  }, []);
+
   return {
     socket,
     createRoom,
@@ -436,6 +549,9 @@ export function useSocket() {
     forceEndRound,
     endGame,
     kickPlayer,
-    leaveRoom
+    leaveRoom,
+    useItem,
+    letterSnipe,
+    debugGiveAllItems
   };
 }

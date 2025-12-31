@@ -309,8 +309,8 @@ export default function HomeScreen() {
                   type="text"
                   value={roomCode}
                   onChange={(e) => !roomFromLink && setRoomCode(e.target.value.toUpperCase())}
-                  placeholder="Enter 6-letter code"
-                  className={`input-dark text-center text-2xl tracking-widest font-mono ${roomFromLink ? 'bg-white/5 cursor-not-allowed' : ''}`}
+                  placeholder="XXXXXX"
+                  className={`input-dark text-center text-2xl tracking-widest font-mono placeholder:text-base placeholder:tracking-normal ${roomFromLink ? 'bg-white/5 cursor-not-allowed' : ''}`}
                   maxLength={6}
                   readOnly={roomFromLink}
                 />
