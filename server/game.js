@@ -81,6 +81,7 @@ export class GameRoom {
       roundTimeSeconds: settings.roundTimeSeconds || 300, // 5 minutes
       guessTimeSeconds: settings.guessTimeSeconds || 60, // 60 seconds per guess
       customWord: settings.customWord || null,
+      gameMode: settings.gameMode || 'classic', // 'classic' or 'battleRoyale'
       ...settings
     };
     this.state = 'lobby'; // lobby, countdown, playing, roundEnd, gameEnd
@@ -89,7 +90,8 @@ export class GameRoom {
     this.roundStartTime = null;
     this.guessDeadline = null;
     this.roundScores = [];
-    
+    this.eliminatedThisRound = []; // Track who was eliminated this round (array for ties)
+
     // Add host as first player
     this.addPlayer(hostId, hostName);
   }
@@ -112,9 +114,18 @@ export class GameRoom {
       currentGuess: '',
       totalScore: 0,
       roundScore: 0,
-      connected: true
+      connected: true,
+      // Battle Royale fields
+      eliminated: false,
+      eliminatedRound: null,
+      placement: null
     });
     return true;
+  }
+
+  // Get active (non-eliminated) players
+  getActivePlayers() {
+    return Array.from(this.players.values()).filter(p => !p.eliminated);
   }
 
   kickPlayer(playerId) {
@@ -164,23 +175,26 @@ export class GameRoom {
     this.targetWord = customWord || getRandomWord();
     this.roundStartTime = Date.now();
     this.guessDeadline = Date.now() + (this.settings.guessTimeSeconds * 1000);
-    
-    // Reset player states for new round
+    this.eliminatedThisRound = [];
+
+    // Reset player states for new round (only non-eliminated players)
     for (const player of this.players.values()) {
-      player.guesses = [];
-      player.results = [];
-      player.solved = false;
-      player.solvedAt = null;
-      player.solvedInGuesses = 0;
-      player.currentGuess = '';
-      player.roundScore = 0;
-      player.ready = false;
+      if (!player.eliminated) {
+        player.guesses = [];
+        player.results = [];
+        player.solved = false;
+        player.solvedAt = null;
+        player.solvedInGuesses = 0;
+        player.currentGuess = '';
+        player.roundScore = 0;
+        player.ready = false;
+      }
     }
   }
   
   submitGuess(playerId, guess) {
     const player = this.players.get(playerId);
-    if (!player || player.solved || player.guesses.length >= 6) {
+    if (!player || player.eliminated || player.solved || player.guesses.length >= 6) {
       return { success: false, error: 'Cannot submit guess' };
     }
     
@@ -244,9 +258,10 @@ export class GameRoom {
   isRoundOver() {
     // Round ends if time is up
     if (this.getRoundTimeRemaining() <= 0) return true;
-    
-    // Round ends if all players solved or used all guesses
-    for (const player of this.players.values()) {
+
+    // Round ends if all active (non-eliminated) players solved or used all guesses
+    const activePlayers = this.getActivePlayers();
+    for (const player of activePlayers) {
       if (!player.solved && player.guesses.length < 6) {
         return false;
       }
@@ -256,54 +271,120 @@ export class GameRoom {
   
   endRound() {
     this.state = 'roundEnd';
-    
+    this.eliminatedThisRound = [];
+
     // Calculate scores for players who didn't solve
     for (const player of this.players.values()) {
-      if (!player.solved) {
+      if (!player.eliminated && !player.solved) {
         player.roundScore = 0;
       }
     }
-    
+
     // Store round scores
     const roundResult = {
       round: this.currentRound,
       word: this.targetWord,
-      scores: {}
+      scores: {},
+      eliminated: null
     };
-    
+
     for (const [id, player] of this.players) {
       roundResult.scores[id] = {
         name: player.name,
         solved: player.solved,
         guesses: player.guesses.length,
-        score: player.roundScore
+        score: player.roundScore,
+        eliminated: player.eliminated
       };
     }
-    
+
+    // Battle Royale elimination logic
+    if (this.settings.gameMode === 'battleRoyale') {
+      const activePlayers = this.getActivePlayers();
+
+      // Only eliminate if more than 1 active player would remain after elimination
+      if (activePlayers.length > 1) {
+        // Find lowest scorer(s) among active players
+        const lowestScore = Math.min(...activePlayers.map(p => p.roundScore));
+        const lowestScorers = activePlayers.filter(p => p.roundScore === lowestScore);
+
+        // Eliminate all tied lowest scorers (but keep at least 1 player alive)
+        const canEliminate = Math.min(lowestScorers.length, activePlayers.length - 1);
+        const toEliminate = lowestScorers.slice(0, canEliminate);
+
+        this.eliminatedThisRound = [];
+
+        for (let i = 0; i < toEliminate.length; i++) {
+          const eliminated = toEliminate[i];
+          eliminated.eliminated = true;
+          eliminated.eliminatedRound = this.currentRound;
+          // Placement: if 5 active and 2 eliminated, they get 5th and 4th place
+          eliminated.placement = activePlayers.length - i;
+
+          this.eliminatedThisRound.push({
+            id: eliminated.id,
+            name: eliminated.name,
+            score: eliminated.roundScore,
+            placement: eliminated.placement
+          });
+        }
+
+        roundResult.eliminated = this.eliminatedThisRound;
+      }
+    }
+
     this.roundScores.push(roundResult);
-    
+
     return roundResult;
   }
   
   isGameOver() {
+    if (this.settings.gameMode === 'battleRoyale') {
+      // Battle Royale ends when only 1 player remains
+      const activePlayers = this.getActivePlayers();
+      return activePlayers.length <= 1;
+    }
+    // Classic mode ends after configured rounds
     return this.currentRound >= this.settings.rounds;
   }
   
   endGame() {
     this.state = 'gameEnd';
-    
+
+    // In Battle Royale, set winner's placement
+    if (this.settings.gameMode === 'battleRoyale') {
+      const activePlayers = this.getActivePlayers();
+      if (activePlayers.length === 1) {
+        activePlayers[0].placement = 1; // Winner!
+      }
+    }
+
     // Get final standings
     const standings = Array.from(this.players.values())
       .map(p => ({
         id: p.id,
         name: p.name,
-        totalScore: p.totalScore
+        totalScore: p.totalScore,
+        eliminated: p.eliminated,
+        eliminatedRound: p.eliminatedRound,
+        placement: p.placement
       }))
-      .sort((a, b) => b.totalScore - a.totalScore);
-    
+      .sort((a, b) => {
+        // In Battle Royale, sort by placement (1st, 2nd, etc.)
+        if (this.settings.gameMode === 'battleRoyale') {
+          if (a.placement && b.placement) return a.placement - b.placement;
+          if (a.placement) return -1; // Winner first
+          if (b.placement) return 1;
+        }
+        // Fallback to score
+        return b.totalScore - a.totalScore;
+      });
+
     return {
       standings,
-      roundScores: this.roundScores
+      roundScores: this.roundScores,
+      gameMode: this.settings.gameMode,
+      winner: this.settings.gameMode === 'battleRoyale' ? this.getActivePlayers()[0] : null
     };
   }
   
@@ -320,6 +401,10 @@ export class GameRoom {
         totalScore: player.totalScore,
         roundScore: player.roundScore,
         returnedToLobby: player.returnedToLobby || false,
+        // Battle Royale fields
+        eliminated: player.eliminated || false,
+        eliminatedRound: player.eliminatedRound,
+        placement: player.placement,
         // Send all guess results (colors only, no letters) for other players to see progress
         guessResults: player.results.map(result =>
           result.map(cell => cell.status)
@@ -330,7 +415,7 @@ export class GameRoom {
           : null
       };
     }
-    
+
     return {
       roomCode: this.roomCode,
       hostId: this.hostId,
@@ -340,7 +425,42 @@ export class GameRoom {
       settings: this.settings,
       players,
       roundTimeRemaining: this.getRoundTimeRemaining(),
-      guessTimeRemaining: this.getGuessTimeRemaining()
+      guessTimeRemaining: this.getGuessTimeRemaining(),
+      // Battle Royale info
+      gameMode: this.settings.gameMode,
+      activePlayers: this.getActivePlayers().length,
+      eliminatedThisRound: this.eliminatedThisRound
+    };
+  }
+
+  // Get spectator view with all players' full board state (for eliminated players)
+  getSpectatorState() {
+    const players = {};
+    for (const [id, player] of this.players) {
+      players[id] = {
+        id: player.id,
+        name: player.name,
+        eliminated: player.eliminated || false,
+        eliminatedRound: player.eliminatedRound,
+        placement: player.placement,
+        solved: player.solved,
+        solvedInGuesses: player.solvedInGuesses,
+        totalScore: player.totalScore,
+        roundScore: player.roundScore,
+        // Full board visibility for spectators
+        guesses: player.guesses,
+        results: player.results
+      };
+    }
+
+    return {
+      roomCode: this.roomCode,
+      state: this.state,
+      currentRound: this.currentRound,
+      targetWord: this.state === 'roundEnd' || this.state === 'gameEnd' ? this.targetWord : null,
+      gameMode: this.settings.gameMode,
+      activePlayers: this.getActivePlayers().length,
+      players
     };
   }
   

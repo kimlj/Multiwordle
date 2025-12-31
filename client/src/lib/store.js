@@ -14,6 +14,7 @@ export const useGameStore = create((set, get) => ({
   // Game state from server
   gameState: null,
   playerState: null,
+  spectatorState: null, // For eliminated players to see all boards
   
   // Local input state
   currentInput: '',
@@ -43,6 +44,7 @@ export const useGameStore = create((set, get) => ({
   setIsHost: (isHost) => set({ isHost }),
   
   setGameState: (gameState) => set({ gameState }),
+  setSpectatorState: (spectatorState) => set({ spectatorState }),
   setPlayerState: (playerState) => {
     const state = get();
     // Update keyboard status based on player's guesses
@@ -115,6 +117,7 @@ export const useGameStore = create((set, get) => ({
     isHost: false,
     gameState: null,
     playerState: null,
+    spectatorState: null,
     currentInput: '',
     keyboardStatus: {},
     error: null,

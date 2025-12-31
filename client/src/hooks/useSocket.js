@@ -69,6 +69,7 @@ export function useSocket() {
     setIsHost,
     setGameState,
     setPlayerState,
+    setSpectatorState,
     setShowCountdown,
     setCountdownValue,
     setTimers,
@@ -147,6 +148,10 @@ export function useSocket() {
 
       socket.on('playerState', (playerState) => {
         setPlayerState(playerState);
+      });
+
+      socket.on('spectatorState', (spectatorState) => {
+        setSpectatorState(spectatorState);
       });
 
       socket.on('countdown', ({ seconds }) => {

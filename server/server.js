@@ -113,10 +113,16 @@ function startRound(roomCode, customWord = null) {
   });
 
   // Send initial playerState to each player
+  // Eliminated players get spectator state instead
   for (const [playerId, player] of room.players) {
     const playerSocket = io.sockets.sockets.get(playerId);
     if (playerSocket) {
-      playerSocket.emit('playerState', room.getPlayerState(playerId));
+      if (player.eliminated) {
+        // Eliminated players spectate - they see all boards
+        playerSocket.emit('spectatorState', room.getSpectatorState());
+      } else {
+        playerSocket.emit('playerState', room.getPlayerState(playerId));
+      }
     }
   }
 
@@ -149,13 +155,23 @@ function endRound(roomCode) {
   const room = gameManager.getRoom(roomCode);
   if (!room) return;
 
+  // Guard against double calls - only process if still in playing state
+  if (room.state !== 'playing') return;
+
   clearRoomTimers(roomCode);
   const roundResult = room.endRound();
 
   // Calculate detailed stats for each player
   const playerStats = {};
   for (const [playerId, player] of room.players) {
-    if (player.solved) {
+    if (player.eliminated && player.eliminatedRound !== room.currentRound) {
+      // Already eliminated in previous round
+      playerStats[playerId] = {
+        eliminated: true,
+        eliminatedRound: player.eliminatedRound,
+        placement: player.placement
+      };
+    } else if (player.solved) {
       const solveTimeMs = player.solvedAt - room.roundStartTime;
       const solveTimeSec = Math.floor(solveTimeMs / 1000);
       playerStats[playerId] = {
@@ -165,13 +181,19 @@ function endRound(roomCode) {
         baseScore: 1000,
         guessBonus: (7 - player.solvedInGuesses) * 150,
         timeBonus: Math.floor(((room.settings.roundTimeSeconds * 1000 - solveTimeMs) / (room.settings.roundTimeSeconds * 1000)) * 500),
-        totalScore: player.roundScore
+        totalScore: player.roundScore,
+        eliminated: player.eliminated,
+        eliminatedRound: player.eliminatedRound,
+        placement: player.placement
       };
     } else {
       playerStats[playerId] = {
         solved: false,
         guesses: player.guesses.length,
-        totalScore: 0
+        totalScore: 0,
+        eliminated: player.eliminated,
+        eliminatedRound: player.eliminatedRound,
+        placement: player.placement
       };
     }
   }
@@ -185,10 +207,16 @@ function endRound(roomCode) {
   });
 
   // Send individual player states with their guesses revealed
+  // For eliminated players, also send spectator state
   for (const [playerId, player] of room.players) {
     const socket = io.sockets.sockets.get(playerId);
     if (socket) {
       socket.emit('playerState', room.getPlayerState(playerId));
+
+      // Send spectator state to eliminated players (they can see all boards)
+      if (player.eliminated) {
+        socket.emit('spectatorState', room.getSpectatorState());
+      }
     }
   }
 
@@ -639,6 +667,10 @@ io.on('connection', (socket) => {
           p.totalScore = 0;
           p.roundScore = 0;
           p.returnedToLobby = false;
+          // Reset battle royale elimination status
+          p.eliminated = false;
+          p.eliminatedRound = null;
+          p.placement = null;
         }
 
         // Notify remaining players of the updated state
@@ -671,6 +703,20 @@ io.on('connection', (socket) => {
         room.settings.customWord = word;
       }
 
+      // Battle Royale: auto-adjust rounds
+      if (room.settings.gameMode === 'battleRoyale') {
+        const playerCount = room.players.size;
+        const minRounds = playerCount - 1; // Need at least (players - 1) rounds
+
+        // If custom words provided, match rounds to custom words count
+        if (room.settings.customWords && room.settings.customWords.length > 0) {
+          room.settings.rounds = room.settings.customWords.length;
+        } else {
+          // Random words: use player count - 1 as safe default
+          room.settings.rounds = minRounds;
+        }
+      }
+
       startCountdownTimer(roomCode);
       if (callback) callback({ success: true });
     }
@@ -695,10 +741,10 @@ io.on('connection', (socket) => {
     if (result.success) {
       // Send result to the guessing player
       callback(result);
-      
+
       // Send player's full state
       socket.emit('playerState', room.getPlayerState(socket.id));
-      
+
       // Broadcast update to all players (without revealing letters)
       io.to(roomCode).emit('guessSubmitted', {
         playerId: socket.id,
@@ -708,7 +754,17 @@ io.on('connection', (socket) => {
         score: result.score,
         gameState: room.getPublicState()
       });
-      
+
+      // Send updated spectator state to eliminated players (they see full boards)
+      for (const [playerId, player] of room.players) {
+        if (player.eliminated) {
+          const playerSocket = io.sockets.sockets.get(playerId);
+          if (playerSocket) {
+            playerSocket.emit('spectatorState', room.getSpectatorState());
+          }
+        }
+      }
+
       // Check if round is over
       if (room.isRoundOver()) {
         setTimeout(() => endRound(roomCode), 1000);
@@ -786,6 +842,10 @@ io.on('connection', (socket) => {
       player.solvedInGuesses = 0;
       player.totalScore = 0;
       player.roundScore = 0;
+      // Reset battle royale elimination status
+      player.eliminated = false;
+      player.eliminatedRound = null;
+      player.placement = null;
     }
 
     io.to(roomCode).emit('gameReset', room.getPublicState());
@@ -845,6 +905,10 @@ io.on('connection', (socket) => {
         p.totalScore = 0;
         p.roundScore = 0;
         p.returnedToLobby = false;
+        // Reset battle royale elimination status
+        p.eliminated = false;
+        p.eliminatedRound = null;
+        p.placement = null;
       }
 
       io.to(roomCode).emit('gameReset', room.getPublicState());
@@ -942,6 +1006,10 @@ io.on('connection', (socket) => {
               p.totalScore = 0;
               p.roundScore = 0;
               p.returnedToLobby = false;
+              // Reset battle royale elimination status
+              p.eliminated = false;
+              p.eliminatedRound = null;
+              p.placement = null;
             }
 
             io.to(roomCode).emit('gameReset', room.getPublicState());
@@ -1036,6 +1104,10 @@ io.on('connection', (socket) => {
                 p.totalScore = 0;
                 p.roundScore = 0;
                 p.returnedToLobby = false;
+                // Reset battle royale elimination status
+                p.eliminated = false;
+                p.eliminatedRound = null;
+                p.placement = null;
               }
 
               io.to(roomCode).emit('gameReset', room.getPublicState());

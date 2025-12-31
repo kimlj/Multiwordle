@@ -344,8 +344,46 @@ export default function LobbyScreen({ waitingForOthers = false }) {
             {isHost ? (
               /* Editable settings for host */
               <div className="space-y-4">
+                {/* Game Mode Selection */}
                 <div>
-                  <label className="block text-sm text-white/60 mb-2">Number of Rounds</label>
+                  <label className="block text-sm text-white/60 mb-2">Game Mode</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ gameMode: 'classic' })}
+                      className={`flex-1 py-3 rounded-lg font-bold transition-all ${
+                        gameState.settings.gameMode !== 'battleRoyale'
+                          ? 'bg-wordle-green text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}
+                    >
+                      <div className="text-sm">Classic</div>
+                      <div className="text-xs opacity-60">Fixed rounds</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ gameMode: 'battleRoyale' })}
+                      className={`flex-1 py-3 rounded-lg font-bold transition-all ${
+                        gameState.settings.gameMode === 'battleRoyale'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20'
+                      }`}
+                    >
+                      <div className="text-sm">Elimination</div>
+                      <div className="text-xs opacity-60">Last one standing</div>
+                    </button>
+                  </div>
+                  {gameState.settings.gameMode === 'battleRoyale' && (
+                    <p className="text-xs text-red-400/80 mt-2 text-center">
+                      Lowest scorer eliminated each round. Last player wins!
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm text-white/60 mb-2">
+                    {gameState.settings.gameMode === 'battleRoyale' ? 'Max Rounds (if no winner)' : 'Number of Rounds'}
+                  </label>
                   <div className="flex gap-2">
                     {[1, 3, 5, 7].map((n) => (
                       <button
@@ -435,6 +473,12 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               /* Read-only settings for non-host */
               <div className="space-y-3">
                 <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <span className="text-white/60">Game Mode</span>
+                  <span className={`font-bold ${gameState.settings.gameMode === 'battleRoyale' ? 'text-red-400' : 'text-wordle-green'}`}>
+                    {gameState.settings.gameMode === 'battleRoyale' ? 'Elimination' : 'Classic'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                   <span className="text-white/60">Rounds</span>
                   <span className="font-bold">{gameState.settings.rounds}</span>
                 </div>
@@ -442,6 +486,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                   <span className="text-white/60">Round Time</span>
                   <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
                 </div>
+                {gameState.settings.gameMode === 'battleRoyale' && (
+                  <p className="text-xs text-red-400/80 text-center mt-2">
+                    Lowest scorer eliminated each round!
+                  </p>
+                )}
               </div>
             )}
 

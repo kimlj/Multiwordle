@@ -9,9 +9,22 @@ export default function ResultsScreen() {
 
   if (!gameState) return null;
 
+  const isBattleRoyale = gameState.settings?.gameMode === 'battleRoyale';
+
+  // Sort players - Battle Royale by placement, Classic by score
   const players = Object.values(gameState.players)
-    .sort((a, b) => b.totalScore - a.totalScore);
-  
+    .sort((a, b) => {
+      if (isBattleRoyale) {
+        // Winner (placement 1) first, then by elimination order (earlier elimination = worse)
+        if (a.placement === 1) return -1;
+        if (b.placement === 1) return 1;
+        if (a.placement && b.placement) return a.placement - b.placement;
+        if (a.placement) return -1;
+        if (b.placement) return 1;
+      }
+      return b.totalScore - a.totalScore;
+    });
+
   const winner = players[0];
   const isWinner = winner?.id === playerId;
 
@@ -47,12 +60,18 @@ export default function ResultsScreen() {
         <div className="glass rounded-2xl p-4 sm:p-6 animate-bounce-in">
           {/* Winner announcement - compact */}
           <div className="text-center mb-4">
-            <div className="text-4xl mb-2">🏆</div>
+            <div className="text-4xl mb-2">{isBattleRoyale ? '👑' : '🏆'}</div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold">
-              {isWinner ? 'You Win!' : `${winner?.name} Wins!`}
+              {isBattleRoyale
+                ? (isWinner ? 'Victory Royale!' : `${winner?.name} is Champion!`)
+                : (isWinner ? 'You Win!' : `${winner?.name} Wins!`)}
             </h1>
             <p className="text-white/60 text-sm">
-              <span className="text-wordle-green font-bold text-lg">{winner?.totalScore}</span> pts
+              {isBattleRoyale ? (
+                <>Last one standing after <span className="text-wordle-yellow font-bold">{gameState.currentRound}</span> rounds</>
+              ) : (
+                <><span className="text-wordle-green font-bold text-lg">{winner?.totalScore}</span> pts</>
+              )}
             </p>
           </div>
 
@@ -74,15 +93,22 @@ export default function ResultsScreen() {
                       idx === 2 ? 'bg-amber-600 text-white' :
                       'bg-white/10 text-white/60'}
                   `}>
-                    {idx + 1}
+                    {isBattleRoyale ? (idx === 0 ? '👑' : `#${player.placement || idx + 1}`) : idx + 1}
                   </div>
                   <span className="font-medium text-sm truncate max-w-[120px]">
                     {player.name}
                     {player.id === playerId && <span className="text-wordle-green"> (You)</span>}
                   </span>
                 </div>
-                <div className={`font-bold text-sm ${idx === 0 ? 'text-wordle-green' : ''}`}>
-                  {player.totalScore}
+                <div className="flex items-center gap-2">
+                  {isBattleRoyale && player.eliminatedRound && (
+                    <span className="text-xs text-white/40">
+                      R{player.eliminatedRound}
+                    </span>
+                  )}
+                  <div className={`font-bold text-sm ${idx === 0 ? 'text-wordle-green' : ''}`}>
+                    {player.totalScore}
+                  </div>
                 </div>
               </div>
             ))}
