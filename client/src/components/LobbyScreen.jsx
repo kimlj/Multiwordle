@@ -500,41 +500,48 @@ export default function LobbyScreen({ waitingForOthers = false }) {
           /* NON-HOST LAYOUT: Single column - Settings bar, Players, Ready, Scoring */
           <div className="max-w-lg mx-auto space-y-4">
             {/* Compact Settings Bar */}
-            <div className="glass rounded-xl p-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                    gameState.settings.gameMode === 'battleRoyale'
-                      ? 'bg-red-500/20 text-red-400'
-                      : 'bg-wordle-green/20 text-wordle-green'
-                  }`}>
-                    {gameState.settings.gameMode === 'battleRoyale' ? 'Elimination' : 'Classic'}
+            <div className="glass rounded-xl p-4 space-y-3">
+              {/* Modes row */}
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  gameState.settings.gameMode === 'battleRoyale'
+                    ? 'bg-red-500/20 text-red-400'
+                    : 'bg-wordle-green/20 text-wordle-green'
+                }`}>
+                  {gameState.settings.gameMode === 'battleRoyale' ? 'Elimination' : 'Classic'}
+                </span>
+                {gameState.settings.mirrorMatch && (
+                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-wordle-yellow/20 text-wordle-yellow">
+                    Mirror
                   </span>
+                )}
+                {gameState.settings.hardcoreMode && (
+                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-purple-500/20 text-purple-400">
+                    Hardcore
+                  </span>
+                )}
+              </div>
+
+              {/* Stats row */}
+              <div className="flex items-center justify-center gap-6 text-sm">
+                <div>
+                  <span className="text-white/40">Rounds: </span>
+                  <span className="font-bold">{gameState.settings.rounds}</span>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <div>
-                    <span className="text-white/40">Rounds: </span>
-                    <span className="font-bold">{gameState.settings.rounds}</span>
-                  </div>
-                  <div>
-                    <span className="text-white/40">Time: </span>
-                    <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
-                  </div>
-                  {gameState.settings.mirrorMatch && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-wordle-yellow/20 text-wordle-yellow">
-                      🪞 Mirror
-                    </span>
-                  )}
-                  {gameState.settings.hardcoreMode && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400">
-                      💀 Hardcore
-                    </span>
-                  )}
+                <div>
+                  <span className="text-white/40">Time: </span>
+                  <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
                 </div>
               </div>
-              {gameState.settings.gameMode === 'battleRoyale' && (
-                <p className="text-xs text-red-400/60 text-center mt-2">
-                  Lowest scorer eliminated each round!
+
+              {/* Summary */}
+              {(gameState.settings.gameMode === 'battleRoyale' || gameState.settings.mirrorMatch || gameState.settings.hardcoreMode) && (
+                <p className="text-xs text-white/50 text-center">
+                  {[
+                    gameState.settings.gameMode === 'battleRoyale' && 'Lowest scorer eliminated',
+                    gameState.settings.mirrorMatch && 'Same opener for all',
+                    gameState.settings.hardcoreMode && 'No keyboard colors'
+                  ].filter(Boolean).join(' • ')}
                 </p>
               )}
             </div>
