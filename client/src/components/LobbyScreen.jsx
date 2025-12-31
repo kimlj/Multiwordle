@@ -455,6 +455,25 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     <span className="text-white/40 text-sm">sec</span>
                   </div>
                 </div>
+
+                {/* Mirror Match Toggle */}
+                <div>
+                  <label className="block text-sm text-white/60 mb-2">Mirror Match</label>
+                  <button
+                    type="button"
+                    onClick={() => updateSettings({ mirrorMatch: !gameState.settings.mirrorMatch })}
+                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                      gameState.settings.mirrorMatch
+                        ? 'bg-wordle-yellow text-black'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  >
+                    <span>{gameState.settings.mirrorMatch ? '🪞 Enabled' : 'Disabled'}</span>
+                  </button>
+                  <p className="text-xs text-white/40 mt-2 text-center">
+                    Everyone starts with the same random opener word
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -482,6 +501,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     <span className="text-white/40">Time: </span>
                     <span className="font-bold">{formatTime(gameState.settings.roundTimeSeconds)}</span>
                   </div>
+                  {gameState.settings.mirrorMatch && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-wordle-yellow/20 text-wordle-yellow">
+                      🪞 Mirror
+                    </span>
+                  )}
                 </div>
               </div>
               {gameState.settings.gameMode === 'battleRoyale' && (

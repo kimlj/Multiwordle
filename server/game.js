@@ -82,8 +82,10 @@ export class GameRoom {
       guessTimeSeconds: settings.guessTimeSeconds || 60, // 60 seconds per guess
       customWord: settings.customWord || null,
       gameMode: settings.gameMode || 'classic', // 'classic' or 'battleRoyale'
+      mirrorMatch: settings.mirrorMatch || false, // Everyone starts with same opener
       ...settings
     };
+    this.mirrorOpener = null; // The shared opener word for mirror match
     this.state = 'lobby'; // lobby, countdown, playing, roundEnd, gameEnd
     this.currentRound = 0;
     this.targetWord = null;
@@ -190,6 +192,46 @@ export class GameRoom {
         player.ready = false;
       }
     }
+
+    // Reset mirror opener
+    this.mirrorOpener = null;
+  }
+
+  // Apply mirror match opener to all active players
+  applyMirrorOpener(openerWord) {
+    this.mirrorOpener = openerWord.toUpperCase();
+    const results = [];
+
+    for (const player of this.players.values()) {
+      if (!player.eliminated) {
+        const result = evaluateGuess(this.mirrorOpener, this.targetWord);
+        player.guesses.push(this.mirrorOpener);
+        player.results.push(result);
+
+        // Check if opener solved it (unlikely but possible)
+        const colors = countColors(result);
+        if (colors.green === 5) {
+          player.solved = true;
+          player.solvedAt = Date.now();
+          player.solvedInGuesses = 1;
+
+          const remainingTime = (this.settings.roundTimeSeconds * 1000) - (player.solvedAt - this.roundStartTime);
+          player.roundScore = calculateScore(1, remainingTime, this.settings.roundTimeSeconds * 1000);
+          player.totalScore += player.roundScore;
+        }
+
+        results.push({
+          playerId: player.id,
+          result,
+          colors
+        });
+      }
+    }
+
+    return {
+      opener: this.mirrorOpener,
+      results
+    };
   }
   
   submitGuess(playerId, guess) {

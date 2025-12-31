@@ -5,7 +5,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GameManager } from './game.js';
-import { isValidWord } from './words.js';
+import { isValidWord, getRandomWord } from './words.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,13 +103,37 @@ function startRound(roomCode, customWord = null) {
   }
 
   room.startRound(wordToUse);
-  
+
+  // Apply mirror match opener if enabled
+  let mirrorOpenerData = null;
+  if (room.settings.mirrorMatch) {
+    // Collect all words to exclude (target word + all custom words)
+    const excludedWords = new Set();
+    excludedWords.add(room.targetWord.toUpperCase());
+    if (room.settings.customWords) {
+      for (const word of room.settings.customWords) {
+        excludedWords.add(word.toUpperCase());
+      }
+    }
+
+    // Pick a random opener word (not in excluded words)
+    let openerWord;
+    let attempts = 0;
+    do {
+      openerWord = getRandomWord();
+      attempts++;
+    } while (excludedWords.has(openerWord.toUpperCase()) && attempts < 100);
+
+    mirrorOpenerData = room.applyMirrorOpener(openerWord);
+  }
+
   // Send round start to all players
   io.to(roomCode).emit('roundStart', {
     round: room.currentRound,
     totalRounds: room.settings.rounds,
     roundTimeSeconds: room.settings.roundTimeSeconds,
-    guessTimeSeconds: room.settings.guessTimeSeconds
+    guessTimeSeconds: room.settings.guessTimeSeconds,
+    mirrorOpener: mirrorOpenerData
   });
 
   // Send initial playerState to each player
