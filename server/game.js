@@ -11,6 +11,7 @@ export const ITEMS = {
   SHIELD: { id: 'shield', type: 'powerup', name: 'Shield', rarity: 'common', emoji: '🛡️' },
   LETTER_REVEAL: { id: 'letter_reveal', type: 'powerup', name: 'Letter Reveal', rarity: 'uncommon', emoji: '✨' },
   TIME_WARP: { id: 'time_warp', type: 'powerup', name: 'Time Warp', rarity: 'uncommon', emoji: '⏰' },
+  XRAY_VISION: { id: 'xray_vision', type: 'powerup', name: 'X-Ray Vision', rarity: 'legendary', emoji: '👁️' },
 
   // Sabotages (hurt opponents) - Duration: 35% of round time
   BLINDFOLD: { id: 'blindfold', type: 'sabotage', name: 'Blindfold', rarity: 'common', emoji: '🙈' },
@@ -26,8 +27,19 @@ export const RARITY_POOLS = {
   common: ['letter_snipe', 'shield', 'blindfold', 'flip_it'],
   uncommon: ['letter_reveal', 'time_warp', 'keyboard_shuffle', 'invisible_ink'],
   rare: ['amnesia'],
-  legendary: ['identity_theft']
+  legendary: ['identity_theft', 'xray_vision']
 };
+
+// Item Round Challenge Types
+export const CHALLENGES = {
+  SPEED_SOLVE: { id: 'speed_solve', name: 'Speed Solve', description: 'Solve in under 25 seconds', emoji: '⚡' },
+  RARE_LETTERS: { id: 'rare_letters', name: 'Rare Letters', description: 'Use Z, X, Q, or J in a guess', emoji: '💎' },
+  FIRST_BLOOD: { id: 'first_blood', name: 'First Blood', description: 'First player to submit a guess', emoji: '🩸' },
+  EFFICIENCY: { id: 'efficiency', name: 'Efficiency', description: 'Solve in 3 guesses or less', emoji: '🎯' }
+};
+
+// Rare letters for the challenge
+export const RARE_LETTERS = ['Z', 'X', 'Q', 'J'];
 
 // Get random item based on player position (Mario Kart style)
 export function getRandomDrop(playerPosition, totalPlayers, isPowerUpOnly = false, isSabotageOnly = false) {
@@ -167,6 +179,13 @@ export class GameRoom {
     this.roundScores = [];
     this.eliminatedThisRound = []; // Track who was eliminated this round (array for ties)
 
+    // Item Round system
+    this.itemRounds = new Set(); // Which rounds are Item Rounds
+    this.currentChallenge = null; // Current Item Round challenge
+    this.itemRoundReward = null; // Pre-determined reward for this Item Round
+    this.firstGuessPlayerId = null; // For First Blood challenge
+    this.challengeCompletedBy = new Set(); // Players who completed the challenge this round
+
     // Add host as first player
     this.addPlayer(hostId, hostName);
   }
@@ -253,6 +272,64 @@ export class GameRoom {
   startCountdown() {
     this.state = 'countdown';
   }
+
+  // Initialize Item Rounds BEFORE game starts (called when game starts)
+  // Randomly selects which rounds will be Item Rounds for this game
+  initializeItemRounds() {
+    if (!this.settings.powerUpsEnabled) {
+      this.itemRounds = new Set();
+      return;
+    }
+
+    const totalRounds = this.settings.rounds;
+
+    // Calculate how many item rounds (less than 50%, at least 1 if 3+ rounds)
+    // 3 rounds: 1, 4 rounds: 1, 5 rounds: 2, 6 rounds: 2, 7 rounds: 3, etc.
+    const numItemRounds = Math.max(1, Math.floor((totalRounds - 1) / 2));
+
+    // Available rounds: all except the last round
+    const availableRounds = [];
+    for (let r = 1; r < totalRounds; r++) {
+      availableRounds.push(r);
+    }
+
+    // Shuffle available rounds
+    for (let i = availableRounds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [availableRounds[i], availableRounds[j]] = [availableRounds[j], availableRounds[i]];
+    }
+
+    // Pick the first numItemRounds and sort them
+    const selectedRounds = availableRounds.slice(0, numItemRounds).sort((a, b) => a - b);
+    this.itemRounds = new Set(selectedRounds);
+
+    console.log(`Item Rounds for ${totalRounds}-round game: [${[...this.itemRounds].join(', ')}]`);
+  }
+
+  // Prepare the next round's Item Round challenge and reward (called during countdown)
+  prepareNextItemRound() {
+    const nextRound = this.currentRound + 1;
+
+    // Set challenge and reward for next round if it's an Item Round
+    if (this.settings.powerUpsEnabled && this.itemRounds.has(nextRound)) {
+      const challenges = Object.values(CHALLENGES);
+      this.currentChallenge = challenges[Math.floor(Math.random() * challenges.length)];
+
+      // Pre-generate a reward item (use a middle position for fairness)
+      const totalPlayers = this.getActivePlayers().length;
+      const middlePosition = Math.ceil(totalPlayers / 2);
+      this.itemRoundReward = getRandomDrop(middlePosition, totalPlayers);
+    } else {
+      this.currentChallenge = null;
+      this.itemRoundReward = null;
+    }
+
+    return {
+      isItemRound: this.itemRounds.has(nextRound),
+      challenge: this.currentChallenge,
+      reward: this.itemRoundReward
+    };
+  }
   
   startRound(customWord = null) {
     this.currentRound++;
@@ -261,6 +338,10 @@ export class GameRoom {
     this.roundStartTime = Date.now();
     this.guessDeadline = Date.now() + (this.settings.guessTimeSeconds * 1000);
     this.eliminatedThisRound = [];
+
+    // Reset Item Round tracking (challenge and reward were pre-set during countdown)
+    this.firstGuessPlayerId = null;
+    this.challengeCompletedBy = new Set();
 
     // Reset player states for new round (only non-eliminated players)
     for (const player of this.players.values()) {
@@ -607,7 +688,11 @@ export class GameRoom {
       // Battle Royale info
       gameMode: this.settings.gameMode,
       activePlayers: this.getActivePlayers().length,
-      eliminatedThisRound: this.eliminatedThisRound
+      eliminatedThisRound: this.eliminatedThisRound,
+      // Item Round info
+      isItemRound: this.itemRounds.has(this.currentRound),
+      currentChallenge: this.currentChallenge,
+      itemRoundReward: this.itemRoundReward
     };
   }
 
@@ -752,6 +837,15 @@ export class GameRoom {
       } else if (itemId === 'letter_reveal') {
         // Reveal a random correct letter position
         result.revealedLetter = this.revealRandomLetter(playerId);
+      } else if (itemId === 'xray_vision') {
+        // X-Ray Vision - see all players' boards for 10 seconds
+        const duration = 10000; // 10 seconds
+        player.activeEffects.push({
+          type: 'xray_vision',
+          expiresAt: Date.now() + duration
+        });
+        result.xrayData = this.getAllPlayersBoards(playerId);
+        result.xrayDuration = duration;
       }
       // letter_snipe is handled separately via letterSnipe method
     }
@@ -861,6 +955,89 @@ export class GameRoom {
 
     const idx = sorted.findIndex(p => p.id === playerId);
     return idx === -1 ? sorted.length : idx + 1;
+  }
+
+  // Get all players' boards for X-Ray Vision
+  getAllPlayersBoards(excludePlayerId) {
+    const boards = {};
+    for (const [id, player] of this.players) {
+      if (id !== excludePlayerId && !player.eliminated) {
+        boards[id] = {
+          name: player.name,
+          guesses: player.guesses,
+          results: player.results,
+          solved: player.solved
+        };
+      }
+    }
+    return boards;
+  }
+
+  // Check if First Blood challenge completed
+  checkFirstBlood(playerId) {
+    if (!this.currentChallenge || this.currentChallenge.id !== 'first_blood') return false;
+    if (this.firstGuessPlayerId !== null) return false; // Already claimed
+    if (this.challengeCompletedBy.has(playerId)) return false;
+
+    this.firstGuessPlayerId = playerId;
+    this.challengeCompletedBy.add(playerId);
+    return true;
+  }
+
+  // Check if Rare Letters challenge completed (guess contains Z, X, Q, or J)
+  checkRareLetters(playerId, guess) {
+    if (!this.currentChallenge || this.currentChallenge.id !== 'rare_letters') return false;
+    if (this.challengeCompletedBy.has(playerId)) return false;
+
+    const upperGuess = guess.toUpperCase();
+    const hasRareLetter = RARE_LETTERS.some(letter => upperGuess.includes(letter));
+
+    if (hasRareLetter) {
+      this.challengeCompletedBy.add(playerId);
+      return true;
+    }
+    return false;
+  }
+
+  // Check if Speed Solve challenge completed (solved in under 25 seconds)
+  checkSpeedSolve(playerId) {
+    if (!this.currentChallenge || this.currentChallenge.id !== 'speed_solve') return false;
+    if (this.challengeCompletedBy.has(playerId)) return false;
+
+    const player = this.players.get(playerId);
+    if (!player || !player.solved || !player.solvedAt) return false;
+
+    const solveTimeSeconds = (player.solvedAt - this.roundStartTime) / 1000;
+    if (solveTimeSeconds < 25) {
+      this.challengeCompletedBy.add(playerId);
+      return true;
+    }
+    return false;
+  }
+
+  // Check if Efficiency challenge completed (solved in 3 guesses or less)
+  checkEfficiency(playerId) {
+    if (!this.currentChallenge || this.currentChallenge.id !== 'efficiency') return false;
+    if (this.challengeCompletedBy.has(playerId)) return false;
+
+    const player = this.players.get(playerId);
+    if (!player || !player.solved) return false;
+
+    if (player.solvedInGuesses <= 3) {
+      this.challengeCompletedBy.add(playerId);
+      return true;
+    }
+    return false;
+  }
+
+  // Award challenge completion item (uses pre-generated reward)
+  awardChallengeItem(playerId) {
+    // Use the pre-generated reward item for this Item Round
+    const item = this.itemRoundReward;
+    if (item) {
+      this.addItemToInventory(playerId, item);
+    }
+    return item;
   }
 }
 

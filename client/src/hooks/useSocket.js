@@ -154,9 +154,13 @@ export function useSocket() {
         setSpectatorState(spectatorState);
       });
 
-      socket.on('countdown', ({ seconds }) => {
+      socket.on('countdown', ({ seconds, itemRound }) => {
         setShowCountdown(true);
         setCountdownValue(seconds);
+        // Store Item Round preview info for display during countdown
+        if (itemRound) {
+          useGameStore.getState().setCountdownItemRound(itemRound);
+        }
       });
 
       socket.on('roundStart', (data) => {
@@ -183,8 +187,15 @@ export function useSocket() {
         useGameStore.getState().setRoundEndData({ word, playerStats });
       });
 
-      socket.on('nextRoundCountdown', ({ seconds }) => {
+      socket.on('nextRoundCountdown', ({ seconds, itemRound }) => {
         useGameStore.getState().setNextRoundCountdown(seconds);
+        // Store Item Round preview info for display during countdown
+        if (itemRound) {
+          useGameStore.getState().setCountdownItemRound(itemRound);
+        } else if (seconds === 5) {
+          // Clear at start of countdown if not an item round
+          useGameStore.getState().setCountdownItemRound(null);
+        }
       });
 
       socket.on('gameEnd', (results) => {
@@ -240,6 +251,14 @@ export function useSocket() {
         useGameStore.getState().showToast(`Position ${position}: ${letter}`, 2000);
       });
 
+      socket.on('xrayVisionStart', ({ boards, duration }) => {
+        useGameStore.getState().setXrayBoards(boards);
+        // Auto-clear after duration
+        setTimeout(() => {
+          useGameStore.getState().setXrayBoards(null);
+        }, duration);
+      });
+
       socket.on('activeEffect', ({ effect, duration, data }) => {
         useGameStore.getState().addActiveEffect({ effect, duration, data });
       });
@@ -277,6 +296,22 @@ export function useSocket() {
 
       socket.on('inventoryUpdate', ({ inventory }) => {
         useGameStore.getState().setInventory(inventory);
+      });
+
+      // Broadcast when any player earns an item (visible to all)
+      socket.on('itemEarned', ({ playerId, playerName, items }) => {
+        const store = useGameStore.getState();
+        // Only show notification for OTHER players' earnings
+        if (playerId !== store.playerId) {
+          for (const earning of items) {
+            store.addItemEarningNotification({
+              playerName,
+              item: earning.item,
+              trigger: earning.trigger,
+              challenge: earning.challenge
+            });
+          }
+        }
       });
 
       socket.on('playerJoined', ({ playerName, gameState }) => {

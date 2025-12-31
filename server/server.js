@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GameManager, ITEMS, getRandomDrop, getSabotageDuration } from './game.js';
+import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getSabotageDuration } from './game.js';
 import { isValidWord, getRandomWord } from './words.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,19 +65,29 @@ function startCountdownTimer(roomCode) {
   let countdown = 5;
   const room = gameManager.getRoom(roomCode);
   if (!room) return;
-  
+
   room.startCountdown();
-  
+
+  // Prepare Item Round info for next round (if power-ups enabled)
+  const itemRoundInfo = room.prepareNextItemRound();
+
   const timer = setInterval(() => {
-    io.to(roomCode).emit('countdown', { seconds: countdown });
-    
+    io.to(roomCode).emit('countdown', {
+      seconds: countdown,
+      // Include Item Round preview info
+      itemRound: itemRoundInfo.isItemRound ? {
+        challenge: itemRoundInfo.challenge,
+        reward: itemRoundInfo.reward
+      } : null
+    });
+
     if (countdown <= 0) {
       clearInterval(timer);
       startRound(roomCode);
     }
     countdown--;
   }, 1000);
-  
+
   roomTimers.set(roomCode, { countdown: timer });
 }
 
@@ -245,7 +255,7 @@ function endRound(roomCode) {
   }
 
   // ============================================
-  // EARN SYSTEM - Process drops for power-ups
+  // END-ROUND ITEM DROPS
   // ============================================
   const drops = {}; // playerId -> { item, trigger }
 
@@ -253,18 +263,12 @@ function endRound(roomCode) {
     const activePlayers = room.getActivePlayers();
     const totalPlayers = activePlayers.length;
 
-    // Sort players by round score to determine positions
-    const sortedByScore = [...activePlayers].sort((a, b) => b.roundScore - a.roundScore);
+    // Sort players by round score to find top scorer and rankings
+    const sortedByRoundScore = [...activePlayers].sort((a, b) => b.roundScore - a.roundScore);
+    const topScorer = sortedByRoundScore[0];
 
-    // Find first solver
-    let firstSolver = null;
-    let firstSolveTime = Infinity;
-    for (const player of activePlayers) {
-      if (player.solved && player.solvedAt && player.solvedAt < firstSolveTime) {
-        firstSolveTime = player.solvedAt;
-        firstSolver = player;
-      }
-    }
+    // Determine bottom rank threshold (bottom half, or bottom 2 for small games)
+    const bottomThreshold = Math.max(2, Math.ceil(totalPlayers / 2));
 
     for (const player of activePlayers) {
       const position = room.getPlayerPosition(player.id);
@@ -274,6 +278,10 @@ function endRound(roomCode) {
       const solveTimeSeconds = player.solvedAt
         ? Math.floor((player.solvedAt - room.roundStartTime) / 1000)
         : null;
+
+      // Find round rank (1-based position in this round's scores)
+      const roundRank = sortedByRoundScore.findIndex(p => p.id === player.id) + 1;
+      const isLowRank = roundRank > (totalPlayers - bottomThreshold);
 
       // Track position for next round's Comeback Drop
       player.lastRoundPosition = position;
@@ -285,54 +293,52 @@ function endRound(roomCode) {
         player.failedRoundsStreak = 0;
       }
 
+      // Track low rank streak for underdog drops
+      if (isLowRank) {
+        player.lowRankStreak = (player.lowRankStreak || 0) + 1;
+      } else {
+        player.lowRankStreak = 0;
+      }
+
       let earnedDrop = false;
       let trigger = null;
 
-      // SKILL-BASED TRIGGERS (with cooldown)
-      if (!player.earnCooldown) {
-        // 1. First to Solve (100%)
-        if (firstSolver && firstSolver.id === player.id) {
-          earnedDrop = true;
-          trigger = 'first_solve';
-          player.earnCooldown = true;
-        }
-        // 2. Solve in ≤2 guesses (50% chance - user requested)
-        else if (player.solved && player.solvedInGuesses <= 2 && Math.random() < 0.5) {
-          earnedDrop = true;
-          trigger = 'efficiency';
-          player.earnCooldown = true;
-        }
-        // 3. Speed Demon - under 20 seconds (100%)
-        else if (player.solved && solveTimeSeconds !== null && solveTimeSeconds < 20) {
-          earnedDrop = true;
-          trigger = 'speed_demon';
-          player.earnCooldown = true;
-        }
-      } else {
-        // Reset cooldown for next round
-        player.earnCooldown = false;
+      // FIRST ROUND: Top scorer gets automatic drop
+      if (room.currentRound === 1 && topScorer && topScorer.id === player.id && topScorer.roundScore > 0) {
+        earnedDrop = true;
+        trigger = 'top_scorer';
       }
-
-      // CLUTCH TRIGGERS (no cooldown)
-      // 4. Clutch Solver - 6th guess AND ≤10s remaining (50%)
-      if (!earnedDrop && player.solved && player.solvedInGuesses === 6) {
-        const timeRemainingAtSolve = room.settings.roundTimeSeconds * 1000 - (player.solvedAt - room.roundStartTime);
-        if (timeRemainingAtSolve <= 10000 && Math.random() < 0.5) {
-          earnedDrop = true;
-          trigger = 'clutch';
-        }
+      // SPEED DEMON: Solve in under 20 seconds (any round)
+      else if (player.solved && solveTimeSeconds !== null && solveTimeSeconds < 20) {
+        earnedDrop = true;
+        trigger = 'speed_demon';
       }
-
-      // UNDERDOG TRIGGERS (no cooldown)
-      // 6. Mercy Drop - failed 2+ consecutive rounds (100%)
-      if (!earnedDrop && player.failedRoundsStreak >= 2) {
+      // MERCY DROP: Failed 2+ consecutive rounds
+      else if (player.failedRoundsStreak >= 2) {
         earnedDrop = true;
         trigger = 'mercy';
       }
-      // 7. Comeback Drop - jump 3+ positions (50%)
-      if (!earnedDrop && prevPosition - position >= 3 && Math.random() < 0.5) {
+      // COMEBACK DROP: Jump 3+ positions (50% chance)
+      else if (prevPosition - position >= 3 && Math.random() < 0.5) {
         earnedDrop = true;
         trigger = 'comeback';
+      }
+      // UNDERDOG DROP: Consistently low rank with increasing chance
+      // 1 round low: 50%, 2 rounds: 75%, 3+ rounds: 95%
+      else if (player.lowRankStreak >= 1) {
+        let underdogChance = 0;
+        if (player.lowRankStreak >= 3) {
+          underdogChance = 0.95;
+        } else if (player.lowRankStreak === 2) {
+          underdogChance = 0.75;
+        } else if (player.lowRankStreak === 1) {
+          underdogChance = 0.50;
+        }
+
+        if (Math.random() < underdogChance) {
+          earnedDrop = true;
+          trigger = 'underdog';
+        }
       }
 
       // Give the drop
@@ -344,42 +350,24 @@ function endRound(roomCode) {
         }
       }
     }
-
-    // 5. LUCKY DROP - random rounds give everyone who solved a drop
-    // Pick 1-2 random "lucky rounds" per game (we'll check if this is one)
-    if (!room.luckyRounds) {
-      // Initialize lucky rounds on first round
-      const totalRounds = room.settings.rounds;
-      room.luckyRounds = new Set();
-      const numLucky = totalRounds >= 5 ? 2 : 1;
-      while (room.luckyRounds.size < numLucky) {
-        room.luckyRounds.add(Math.floor(Math.random() * totalRounds) + 1);
-      }
-    }
-
-    if (room.luckyRounds.has(room.currentRound)) {
-      for (const player of activePlayers) {
-        if (player.solved && !drops[player.id]) {
-          const position = room.getPlayerPosition(player.id);
-          const item = getRandomDrop(position, totalPlayers);
-          if (item) {
-            room.addItemToInventory(player.id, item);
-            drops[player.id] = { item, trigger: 'lucky' };
-          }
-        }
-      }
-    }
   }
 
-  // Send item notifications to players who received items
+  // Send item notifications to players who received end-round drops
   for (const [playerId, dropInfo] of Object.entries(drops)) {
-    const socket = io.sockets.sockets.get(playerId);
-    if (socket && dropInfo.item) {
-      socket.emit('itemReceived', { item: dropInfo.item, trigger: dropInfo.trigger });
+    const playerSocket = io.sockets.sockets.get(playerId);
+    if (playerSocket && dropInfo.item) {
+      playerSocket.emit('itemReceived', { item: dropInfo.item, trigger: dropInfo.trigger });
       const player = room.players.get(playerId);
       if (player) {
-        socket.emit('inventoryUpdate', { inventory: player.inventory });
+        playerSocket.emit('inventoryUpdate', { inventory: player.inventory });
       }
+      // Broadcast to all players
+      const playerName = player?.name || 'Someone';
+      io.to(roomCode).emit('itemEarned', {
+        playerId,
+        playerName,
+        items: [{ item: dropInfo.item, trigger: dropInfo.trigger, challenge: null }]
+      });
     }
   }
 
@@ -420,8 +408,18 @@ function startNextRoundCountdown(roomCode) {
   const room = gameManager.getRoom(roomCode);
   if (!room) return;
 
+  // Prepare Item Round info for next round (random challenge & reward each time)
+  const itemRoundInfo = room.prepareNextItemRound();
+
   const timer = setInterval(() => {
-    io.to(roomCode).emit('nextRoundCountdown', { seconds: countdown });
+    io.to(roomCode).emit('nextRoundCountdown', {
+      seconds: countdown,
+      // Include Item Round preview info
+      itemRound: itemRoundInfo.isItemRound ? {
+        challenge: itemRoundInfo.challenge,
+        reward: itemRoundInfo.reward
+      } : null
+    });
 
     if (countdown <= 0) {
       clearInterval(timer);
@@ -903,11 +901,14 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Initialize Item Rounds (randomly selected for this game)
+      room.initializeItemRounds();
+
       startCountdownTimer(roomCode);
       if (callback) callback({ success: true });
     }
   });
-  
+
   // Submit a guess
   socket.on('submitGuess', ({ guess }, callback) => {
     const roomCode = playerRooms.get(socket.id);
@@ -915,21 +916,86 @@ io.on('connection', (socket) => {
       callback({ success: false, error: 'Not in a room' });
       return;
     }
-    
+
     const room = gameManager.getRoom(roomCode);
     if (!room || room.state !== 'playing') {
       callback({ success: false, error: 'Game not in progress' });
       return;
     }
-    
+
     const result = room.submitGuess(socket.id, guess);
-    
+
     if (result.success) {
       // Send result to the guessing player
       callback(result);
 
       // Send player's full state
       socket.emit('playerState', room.getPlayerState(socket.id));
+
+      // ============================================
+      // ITEM ROUND CHALLENGE CHECKS
+      // ============================================
+      const itemEarnings = []; // Track all items earned this guess for broadcast
+
+      if (room.settings.powerUpsEnabled) {
+        const player = room.players.get(socket.id);
+
+        // Challenge checks (if this is an Item Round)
+        if (room.currentChallenge) {
+          let challengeCompleted = false;
+          const challengeType = room.currentChallenge.id;
+
+          // First Blood - first to submit any guess
+          if (challengeType === 'first_blood') {
+            challengeCompleted = room.checkFirstBlood(socket.id);
+          }
+          // Rare Letters - guess contains Z, X, Q, or J
+          else if (challengeType === 'rare_letters') {
+            challengeCompleted = room.checkRareLetters(socket.id, guess);
+          }
+          // Speed Solve - solved in under 25 seconds
+          else if (challengeType === 'speed_solve' && result.solved) {
+            challengeCompleted = room.checkSpeedSolve(socket.id);
+          }
+          // Efficiency - solved in 3 guesses or less
+          else if (challengeType === 'efficiency' && result.solved) {
+            challengeCompleted = room.checkEfficiency(socket.id);
+          }
+
+          if (challengeCompleted) {
+            const challengeItem = room.awardChallengeItem(socket.id);
+            if (challengeItem) {
+              itemEarnings.push({
+                item: challengeItem,
+                trigger: 'challenge',
+                challenge: room.currentChallenge
+              });
+            }
+          }
+        }
+
+        // Send inventory update to the player
+        if (itemEarnings.length > 0 && player) {
+          socket.emit('inventoryUpdate', { inventory: player.inventory });
+
+          // Notify the earning player
+          for (const earning of itemEarnings) {
+            socket.emit('itemReceived', { item: earning.item, trigger: earning.trigger });
+          }
+
+          // Broadcast item earnings to ALL players (so everyone sees who got what)
+          const playerName = player.name;
+          io.to(roomCode).emit('itemEarned', {
+            playerId: socket.id,
+            playerName,
+            items: itemEarnings.map(e => ({
+              item: e.item,
+              trigger: e.trigger,
+              challenge: e.challenge || null
+            }))
+          });
+        }
+      }
 
       // Broadcast update to all players (without revealing letters)
       io.to(roomCode).emit('guessSubmitted', {
@@ -1060,6 +1126,19 @@ io.on('connection', (socket) => {
       // If letter revealed, send to user
       if (result.revealedLetter) {
         socket.emit('letterRevealed', result.revealedLetter);
+      }
+
+      // If X-Ray Vision used, send boards and start effect
+      if (result.xrayData) {
+        socket.emit('xrayVisionStart', {
+          boards: result.xrayData,
+          duration: result.xrayDuration
+        });
+        socket.emit('activeEffect', {
+          effect: 'xray_vision',
+          duration: result.xrayDuration,
+          data: null
+        });
       }
 
       // Send updated states

@@ -17,6 +17,7 @@ const ITEM_INFO = {
   shield: { name: 'Shield', emoji: '🛡️', type: 'powerup', passive: true, desc: 'Auto-blocks next sabotage' },
   letter_reveal: { name: 'Letter Reveal', emoji: '✨', type: 'powerup', desc: 'Shows one correct letter position' },
   time_warp: { name: 'Time Warp', emoji: '⏰', type: 'powerup', desc: '+30 seconds to your timer' },
+  xray_vision: { name: 'X-Ray Vision', emoji: '👁️', type: 'powerup', legendary: true, desc: 'See all players\' boards for 10s' },
   blindfold: { name: 'Blindfold', emoji: '🙈', type: 'sabotage', needsTarget: true, desc: 'Blanks their keyboard letters' },
   flip_it: { name: 'Flip It', emoji: '🙃', type: 'sabotage', needsTarget: true, desc: 'Flips screen upside down' },
   keyboard_shuffle: { name: 'Keyboard Shuffle', emoji: '🔀', type: 'sabotage', needsTarget: true, desc: 'Randomizes keyboard layout' },
@@ -44,7 +45,10 @@ export default function GameScreen({ showResults = false }) {
     itemNotification,
     revealedLetters,
     letterSnipeResult,
-    isBonusTime
+    isBonusTime,
+    itemEarningNotifications,
+    xrayBoards,
+    getFullWord
   } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
@@ -57,6 +61,21 @@ export default function GameScreen({ showResults = false }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showTargetPicker, setShowTargetPicker] = useState(false);
   const [showLetterPicker, setShowLetterPicker] = useState(false);
+  const [itemRoundExpanded, setItemRoundExpanded] = useState(false);
+  const [showItemRoundPopup, setShowItemRoundPopup] = useState(false);
+  const [lastItemRound, setLastItemRound] = useState(null);
+
+  // Show centered popup when Item Round starts, auto-hide after 3s or tap to dismiss
+  useEffect(() => {
+    if (gameState?.isItemRound && gameState?.currentRound !== lastItemRound) {
+      setLastItemRound(gameState.currentRound);
+      setShowItemRoundPopup(true);
+      const timer = setTimeout(() => {
+        setShowItemRoundPopup(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState?.isItemRound, gameState?.currentRound, lastItemRound]);
 
   // Close host menu when clicking outside
   useEffect(() => {
@@ -73,7 +92,9 @@ export default function GameScreen({ showResults = false }) {
       return;
     }
 
-    if (currentInput.length !== 5) {
+    // Get full word including revealed letters
+    const fullWord = getFullWord();
+    if (fullWord.length !== 5) {
       showToast('Word must be 5 letters');
       return;
     }
@@ -84,13 +105,13 @@ export default function GameScreen({ showResults = false }) {
 
     setIsSubmitting(true);
     try {
-      await submitGuess(currentInput);
+      await submitGuess(fullWord);
     } catch (err) {
       showToast(err.message);
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentInput, submitGuess, showToast, playerState, isSubmitting]);
+  }, [getFullWord, submitGuess, showToast, playerState, isSubmitting]);
 
   // Physical keyboard handler for desktop
   useEffect(() => {
@@ -289,6 +310,37 @@ export default function GameScreen({ showResults = false }) {
               <div className="font-bold">{showOtherPlayers ? 'Hide' : 'Show'} ({otherPlayers.length})</div>
             </button>
           )}
+
+          {/* Item Round indicator in header */}
+          {powerUpsEnabled && gameState.isItemRound && gameState.currentChallenge && gameState.state === 'playing' && !showResults && (
+            <div className="relative">
+              <button
+                onClick={() => setItemRoundExpanded(!itemRoundExpanded)}
+                className="glass rounded-lg px-2 py-1 text-xs border border-purple-500/50 bg-purple-500/10"
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-purple-300">{gameState.currentChallenge.emoji}</span>
+                  <span className="text-[10px] text-purple-300 font-medium">ITEM</span>
+                  <span className="text-white/40 text-[10px]">{itemRoundExpanded ? '▲' : '▼'}</span>
+                </div>
+              </button>
+              {/* Dropdown */}
+              {itemRoundExpanded && (
+                <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] animate-fade-in">
+                  <div className="rounded-lg px-3 py-2 border border-purple-500 bg-[#1a1a2e] shadow-lg text-left">
+                    <div className="text-[10px] text-purple-300 font-medium mb-1">ITEM ROUND</div>
+                    <div className="text-[11px] text-white/90 mb-1.5">
+                      {gameState.currentChallenge.emoji} {gameState.currentChallenge.description}
+                    </div>
+                    <div className="text-[10px] text-white/50 border-t border-white/10 pt-1.5">
+                      <span className="text-white/70">Reward:</span> {gameState.itemRoundReward?.emoji} {gameState.itemRoundReward?.name}
+                      <div className="text-white/60 mt-0.5">{ITEM_INFO[gameState.itemRoundReward?.id]?.desc || ''}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Timer */}
@@ -309,6 +361,7 @@ export default function GameScreen({ showResults = false }) {
           </div>
         </div>
       )}
+
 
       {/* Main Grid Area */}
       <div className="flex-1 overflow-auto flex flex-col items-center justify-center">
@@ -694,6 +747,33 @@ export default function GameScreen({ showResults = false }) {
         </div>
       )}
 
+      {/* Item Round Start Popup - Centered, tap to dismiss */}
+      {showItemRoundPopup && gameState?.isItemRound && gameState?.currentChallenge && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-50 bg-black/50"
+          onClick={() => setShowItemRoundPopup(false)}
+        >
+          <div className="animate-bounce-in bg-[#1a1a2e] border-2 border-purple-500 rounded-xl px-6 py-4 shadow-2xl text-center max-w-[280px]">
+            <div className="text-purple-400 font-bold text-lg mb-2">ITEM ROUND</div>
+            <div className="text-white text-base mb-3">
+              <span className="text-xl mr-1">{gameState.currentChallenge.emoji}</span>
+              {gameState.currentChallenge.description}
+            </div>
+            <div className="border-t border-white/20 pt-3">
+              <div className="text-white/60 text-xs mb-1">Complete to earn:</div>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl">{gameState.itemRoundReward?.emoji}</span>
+                <div className="text-left">
+                  <div className="text-white font-medium text-sm">{gameState.itemRoundReward?.name}</div>
+                  <div className="text-white/60 text-xs">{ITEM_INFO[gameState.itemRoundReward?.id]?.desc || ''}</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-white/40 text-[10px] mt-3">Tap to dismiss</div>
+          </div>
+        </div>
+      )}
+
       {/* Item Notification - Centered, subtle */}
       {itemNotification && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
@@ -717,6 +797,58 @@ export default function GameScreen({ showResults = false }) {
           <div className="text-3xl font-bold mb-1">{letterSnipeResult.letter}</div>
           <div className={letterSnipeResult.isInWord ? 'text-white' : 'text-white/60'}>
             {letterSnipeResult.isInWord ? 'IS in the word!' : 'NOT in the word'}
+          </div>
+        </div>
+      )}
+
+      {/* Item Earning Notifications - Shows when other players earn items */}
+      {itemEarningNotifications.length > 0 && (
+        <div className="fixed left-2 bottom-24 sm:bottom-20 flex flex-col gap-1 z-40 max-w-[200px]">
+          {itemEarningNotifications.map((notif) => (
+            <div
+              key={notif.id}
+              className="animate-slide-in bg-black/70 backdrop-blur-sm rounded-lg px-2 py-1.5 text-xs flex items-center gap-1.5"
+            >
+              <span>{notif.item?.emoji || '📦'}</span>
+              <span className="text-white/80 truncate">
+                <span className="font-medium text-white">{notif.playerName}</span>
+                {notif.trigger === 'challenge' ? (
+                  <span className="text-purple-300"> completed {notif.challenge?.name}</span>
+                ) : (
+                  <span className="text-white/50"> got item</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* X-Ray Vision Overlay - See all players' boards */}
+      {xrayBoards && Object.keys(xrayBoards).length > 0 && (
+        <div className="fixed inset-0 bg-black/90 z-50 p-4 overflow-auto">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <span className="text-2xl">👁️</span>
+            <span className="text-purple-300 font-bold">X-RAY VISION</span>
+            <span className="text-white/50 text-sm">· seeing all boards</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            {Object.entries(xrayBoards).map(([id, board]) => (
+              <div key={id} className="glass rounded-lg p-2">
+                <div className="text-center text-sm font-bold mb-2 truncate">
+                  {board.name}
+                  {board.solved && <span className="text-wordle-green ml-1">✓</span>}
+                </div>
+                <WordleGrid
+                  guesses={board.guesses || []}
+                  results={board.results || []}
+                  currentInput=""
+                  isCurrentPlayer={false}
+                  playerName={board.name}
+                  solved={board.solved}
+                  score={0}
+                />
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -25,6 +25,7 @@ export const useGameStore = create((set, get) => ({
   toast: null,
   showCountdown: false,
   countdownValue: 5,
+  countdownItemRound: null, // { challenge, reward } - shown during countdown for Item Rounds
 
   // Round end state
   roundEndData: null,
@@ -36,6 +37,8 @@ export const useGameStore = create((set, get) => ({
   letterSnipeResult: null, // { letter, isInWord }
   inventory: [], // Player's current items
   activeEffects: [], // { effect, expiresAt, data }
+  itemEarningNotifications: [], // [{ playerName, item, trigger, challenge }] - shows when others earn items
+  xrayBoards: null, // { playerId: { name, guesses, results, solved } } - X-Ray Vision data
 
   // Timers
   roundTimeRemaining: 0,
@@ -79,14 +82,32 @@ export const useGameStore = create((set, get) => ({
   
   setCurrentInput: (input) => set({ currentInput: input.toUpperCase().slice(0, 5) }),
   addLetter: (letter) => {
-    const { currentInput } = get();
-    if (currentInput.length < 5) {
+    const { currentInput, revealedLetters } = get();
+    // Only allow typing up to (5 - numRevealed) letters
+    const numRevealed = Object.keys(revealedLetters).length;
+    const maxTypable = 5 - numRevealed;
+    if (currentInput.length < maxTypable) {
       set({ currentInput: currentInput + letter.toUpperCase() });
     }
   },
   removeLetter: () => {
     const { currentInput } = get();
     set({ currentInput: currentInput.slice(0, -1) });
+  },
+  // Build full 5-letter word by merging revealed letters with typed input
+  getFullWord: () => {
+    const { currentInput, revealedLetters } = get();
+    let result = '';
+    let typedIndex = 0;
+    for (let i = 0; i < 5; i++) {
+      if (revealedLetters[i]) {
+        result += revealedLetters[i];
+      } else if (typedIndex < currentInput.length) {
+        result += currentInput[typedIndex];
+        typedIndex++;
+      }
+    }
+    return result;
   },
   clearInput: () => set({ currentInput: '' }),
   
@@ -102,6 +123,7 @@ export const useGameStore = create((set, get) => ({
   
   setShowCountdown: (show) => set({ showCountdown: show }),
   setCountdownValue: (value) => set({ countdownValue: value }),
+  setCountdownItemRound: (itemRound) => set({ countdownItemRound: itemRound }),
 
   setRoundEndData: (data) => set({ roundEndData: data }),
   setNextRoundCountdown: (seconds) => set({ nextRoundCountdown: seconds }),
@@ -127,6 +149,7 @@ export const useGameStore = create((set, get) => ({
     }
   },
   setInventory: (inventory) => set({ inventory }),
+  setXrayBoards: (boards) => set({ xrayBoards: boards }),
   addActiveEffect: ({ effect, duration, data }) => {
     const expiresAt = Date.now() + duration;
     set((state) => ({
@@ -142,6 +165,19 @@ export const useGameStore = create((set, get) => ({
     const state = get();
     return state.activeEffects.some(e => e.effect === effect && e.expiresAt > Date.now());
   },
+  addItemEarningNotification: (notification) => {
+    const id = Date.now() + Math.random();
+    set((state) => ({
+      itemEarningNotifications: [...state.itemEarningNotifications.slice(-4), { ...notification, id }]
+    }));
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      set((state) => ({
+        itemEarningNotifications: state.itemEarningNotifications.filter(n => n.id !== id)
+      }));
+    }, 3000);
+  },
+  clearItemEarningNotifications: () => set({ itemEarningNotifications: [] }),
 
   setTimers: (roundTime, guessTime, isBonusTime = false) => set({
     roundTimeRemaining: roundTime,
@@ -158,7 +194,10 @@ export const useGameStore = create((set, get) => ({
     revealedLetters: {},
     letterSnipeResult: null,
     itemNotification: null,
-    activeEffects: []
+    activeEffects: [],
+    itemEarningNotifications: [],
+    xrayBoards: null,
+    countdownItemRound: null
   }),
   
   // Full reset
@@ -174,12 +213,15 @@ export const useGameStore = create((set, get) => ({
     toast: null,
     showCountdown: false,
     countdownValue: 5,
+    countdownItemRound: null,
     roundTimeRemaining: 0,
     guessTimeRemaining: 0,
     inventory: [],
     activeEffects: [],
     itemNotification: null,
     revealedLetters: {},
-    letterSnipeResult: null
+    letterSnipeResult: null,
+    itemEarningNotifications: [],
+    xrayBoards: null
   })
 }));

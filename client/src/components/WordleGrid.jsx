@@ -39,12 +39,22 @@ export default function WordleGrid({
         status = otherResult[j];
         animate = true;
       } else if (isCurrentRow) {
-        // Check for revealed letter at this position first
+        // Build merged display: revealed letters + typed letters in remaining positions
+        // Count how many revealed letters come before position j
+        let revealedBefore = 0;
+        for (let k = 0; k < j; k++) {
+          if (revealedLetters[k]) revealedBefore++;
+        }
+
         if (revealedLetters[j]) {
           letter = revealedLetters[j];
           status = 'correct'; // Show as green
-        } else if (currentInput[j]) {
-          letter = currentInput[j];
+        } else {
+          // Map to typed input: position j minus revealed letters before it
+          const typedIndex = j - revealedBefore;
+          if (currentInput[typedIndex]) {
+            letter = currentInput[typedIndex];
+          }
         }
       }
 
