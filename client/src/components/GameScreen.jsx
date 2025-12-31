@@ -108,6 +108,7 @@ export default function GameScreen({ showResults = false }) {
   const currentPlayer = gameState.players[playerId];
   const otherPlayers = players.filter(p => p.id !== playerId);
   const isBattleRoyale = gameState.settings?.gameMode === 'battleRoyale';
+  const isHardcore = gameState.settings?.hardcoreMode || false;
   const isEliminated = currentPlayer?.eliminated || false;
   const activePlayers = players.filter(p => !p.eliminated);
   const eliminatedThisRound = gameState.eliminatedThisRound;
@@ -300,7 +301,8 @@ export default function GameScreen({ showResults = false }) {
             {KEYBOARD_ROWS.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1.5 justify-center">
                 {row.map((key) => {
-                  const status = keyboardStatus[key];
+                  // In hardcore mode, never show keyboard colors
+                  const status = isHardcore ? null : keyboardStatus[key];
                   const isWide = key === 'ENTER' || key === 'DEL';
                   return (
                     <button

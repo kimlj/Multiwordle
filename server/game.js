@@ -83,6 +83,7 @@ export class GameRoom {
       customWord: settings.customWord || null,
       gameMode: settings.gameMode || 'classic', // 'classic' or 'battleRoyale'
       mirrorMatch: settings.mirrorMatch || false, // Everyone starts with same opener
+      hardcoreMode: settings.hardcoreMode || false, // No keyboard color hints
       ...settings
     };
     this.mirrorOpener = null; // The shared opener word for mirror match

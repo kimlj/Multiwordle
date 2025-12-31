@@ -474,6 +474,25 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     Everyone starts with the same random opener word
                   </p>
                 </div>
+
+                {/* Hardcore Mode Toggle */}
+                <div>
+                  <label className="block text-sm text-white/60 mb-2">Hardcore Mode</label>
+                  <button
+                    type="button"
+                    onClick={() => updateSettings({ hardcoreMode: !gameState.settings.hardcoreMode })}
+                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                      gameState.settings.hardcoreMode
+                        ? 'bg-red-500 text-white'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  >
+                    <span>{gameState.settings.hardcoreMode ? '💀 Enabled' : 'Disabled'}</span>
+                  </button>
+                  <p className="text-xs text-white/40 mt-2 text-center">
+                    No keyboard colors - pure memory
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -504,6 +523,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                   {gameState.settings.mirrorMatch && (
                     <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-wordle-yellow/20 text-wordle-yellow">
                       🪞 Mirror
+                    </span>
+                  )}
+                  {gameState.settings.hardcoreMode && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400">
+                      💀 Hardcore
                     </span>
                   )}
                 </div>
