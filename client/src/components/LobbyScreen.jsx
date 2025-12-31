@@ -493,6 +493,25 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     No keyboard colors - pure memory
                   </p>
                 </div>
+
+                {/* Fresh Openers Toggle */}
+                <div>
+                  <label className="block text-sm text-white/60 mb-2">Fresh Openers</label>
+                  <button
+                    type="button"
+                    onClick={() => updateSettings({ freshOpenersOnly: !gameState.settings.freshOpenersOnly })}
+                    className={`w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+                      gameState.settings.freshOpenersOnly
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white/10 text-white/60 hover:bg-white/20'
+                    }`}
+                  >
+                    <span>{gameState.settings.freshOpenersOnly ? '🆕 Enabled' : 'Disabled'}</span>
+                  </button>
+                  <p className="text-xs text-white/40 mt-2 text-center">
+                    Can't reuse openers from previous rounds
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -520,6 +539,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     Hardcore
                   </span>
                 )}
+                {gameState.settings.freshOpenersOnly && (
+                  <span className="px-3 py-1 rounded-full text-sm font-bold bg-blue-500/20 text-blue-400">
+                    Fresh
+                  </span>
+                )}
               </div>
 
               {/* Stats row */}
@@ -535,12 +559,13 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               </div>
 
               {/* Summary */}
-              {(gameState.settings.gameMode === 'battleRoyale' || gameState.settings.mirrorMatch || gameState.settings.hardcoreMode) && (
+              {(gameState.settings.gameMode === 'battleRoyale' || gameState.settings.mirrorMatch || gameState.settings.hardcoreMode || gameState.settings.freshOpenersOnly) && (
                 <p className="text-xs text-white/50 text-center">
                   {[
                     gameState.settings.gameMode === 'battleRoyale' && 'Lowest scorer eliminated',
                     gameState.settings.mirrorMatch && 'Same opener for all',
-                    gameState.settings.hardcoreMode && 'No keyboard colors'
+                    gameState.settings.hardcoreMode && 'No keyboard colors',
+                    gameState.settings.freshOpenersOnly && 'New opener each round'
                   ].filter(Boolean).join(' • ')}
                 </p>
               )}

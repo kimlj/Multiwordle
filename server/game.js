@@ -84,6 +84,7 @@ export class GameRoom {
       gameMode: settings.gameMode || 'classic', // 'classic' or 'battleRoyale'
       mirrorMatch: settings.mirrorMatch || false, // Everyone starts with same opener
       hardcoreMode: settings.hardcoreMode || false, // No keyboard color hints
+      freshOpenersOnly: settings.freshOpenersOnly || false, // Can't reuse openers from previous rounds
       ...settings
     };
     this.mirrorOpener = null; // The shared opener word for mirror match
@@ -121,7 +122,9 @@ export class GameRoom {
       // Battle Royale fields
       eliminated: false,
       eliminatedRound: null,
-      placement: null
+      placement: null,
+      // Fresh Openers tracking
+      usedOpeners: []
     });
     return true;
   }
@@ -209,6 +212,11 @@ export class GameRoom {
         player.guesses.push(this.mirrorOpener);
         player.results.push(result);
 
+        // Track opener for Fresh Openers mode
+        if (!player.usedOpeners.includes(this.mirrorOpener)) {
+          player.usedOpeners.push(this.mirrorOpener);
+        }
+
         // Check if opener solved it (unlikely but possible)
         const colors = countColors(result);
         if (colors.green === 5) {
@@ -250,10 +258,21 @@ export class GameRoom {
     if (!isValidWord(upperGuess)) {
       return { success: false, error: 'Not a valid word' };
     }
-    
+
+    // Fresh Openers Only: Block reused openers on first guess
+    const isFirstGuess = player.guesses.length === 0;
+    if (this.settings.freshOpenersOnly && isFirstGuess && player.usedOpeners.includes(upperGuess)) {
+      return { success: false, error: `Already used ${upperGuess} as opener!` };
+    }
+
     const result = evaluateGuess(upperGuess, this.targetWord);
     const colors = countColors(result);
-    
+
+    // Track opener for Fresh Openers mode
+    if (isFirstGuess && !player.usedOpeners.includes(upperGuess)) {
+      player.usedOpeners.push(upperGuess);
+    }
+
     player.guesses.push(upperGuess);
     player.results.push(result);
     
