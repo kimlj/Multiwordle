@@ -805,6 +805,10 @@ io.on('connection', (socket) => {
     if (!player) return;
 
     player.returnedToLobby = true;
+    // Host is always auto-ready
+    if (socket.id === room.hostId) {
+      player.ready = true;
+    }
 
     // Check if all players have returned to lobby
     const allReturned = [...room.players.values()].every(p => p.returnedToLobby);
