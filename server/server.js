@@ -1315,6 +1315,11 @@ io.on('connection', (socket) => {
         p.eliminated = false;
         p.eliminatedRound = null;
         p.placement = null;
+        // Reset power-ups state for new game
+        p.inventory = [];
+        p.hasShield = false;
+        p.activeEffects = [];
+        p.usedItemThisRound = false;
       }
 
       io.to(roomCode).emit('gameReset', room.getPublicState());

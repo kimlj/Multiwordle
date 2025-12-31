@@ -198,6 +198,7 @@ export function useSocket() {
         setGameState(gameState);
         resetForNewRound();
         resetKeyboardStatus();
+        useGameStore.getState().setInventory([]); // Clear inventory for new game
         showToast('Game reset! Ready for a new game.', 2000);
       });
 
