@@ -219,6 +219,13 @@ export function useSocket() {
         useGameStore.getState().resetGame();
       });
 
+      socket.on('leftBehind', ({ message }) => {
+        // Game started without this player - just clear session but stay on current screen
+        // They'll see an error when they try to go back to lobby
+        clearSession();
+        showToast(message, 3000);
+      });
+
       socket.on('roomClosed', () => {
         showToast('Room was closed', 2000);
         clearSession();
@@ -366,7 +373,14 @@ export function useSocket() {
   }, []);
 
   const playAgain = useCallback(() => {
-    socket.emit('playAgain');
+    socket.emit('playAgain', (response) => {
+      if (response && !response.success) {
+        showToast(response.error || 'Could not return to lobby', 3000);
+        // Clear session and go home since we're no longer in the game
+        clearSession();
+        useGameStore.getState().resetGame();
+      }
+    });
   }, []);
 
   const forceEndRound = useCallback(() => {

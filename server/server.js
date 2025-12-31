@@ -610,13 +610,15 @@ io.on('connection', (socket) => {
           }
         }
 
-        // Remove non-returned players and notify them
+        // Remove non-returned players silently (they stay on results screen)
         for (const playerId of playersToRemove) {
           const playerSocket = io.sockets.sockets.get(playerId);
           room.players.delete(playerId);
           playerRooms.delete(playerId);
           if (playerSocket) {
-            playerSocket.emit('kicked', { message: 'Game started without you' });
+            // Don't kick to home - just notify them the game started without them
+            // They'll see an error when they try to go back to lobby
+            playerSocket.emit('leftBehind', { message: 'Game started without you' });
             playerSocket.leave(roomCode);
           }
         }
@@ -790,19 +792,31 @@ io.on('connection', (socket) => {
   });
 
   // Play again / Back to lobby (individual player action)
-  socket.on('playAgain', () => {
+  socket.on('playAgain', (callback) => {
     const roomCode = playerRooms.get(socket.id);
-    if (!roomCode) return;
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
 
     const room = gameManager.getRoom(roomCode);
-    if (!room) return;
+    if (!room) {
+      if (callback) callback({ success: false, error: 'Room no longer exists' });
+      return;
+    }
 
     // Only allow when game has ended
-    if (room.state !== 'gameEnd' && room.state !== 'roundEnd') return;
+    if (room.state !== 'gameEnd' && room.state !== 'roundEnd') {
+      if (callback) callback({ success: false, error: 'Game already in progress' });
+      return;
+    }
 
     // Mark this player as returned to lobby
     const player = room.players.get(socket.id);
-    if (!player) return;
+    if (!player) {
+      if (callback) callback({ success: false, error: 'You are no longer in this game' });
+      return;
+    }
 
     player.returnedToLobby = true;
     // Host is always auto-ready
@@ -838,6 +852,8 @@ io.on('connection', (socket) => {
       // Notify all players about who has returned
       io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
     }
+
+    if (callback) callback({ success: true });
   });
 
   // Kick player (host only)
