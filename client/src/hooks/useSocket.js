@@ -367,6 +367,10 @@ export function useSocket() {
           useGameStore.getState().clearInput();
           resolve(response);
         } else {
+          // Clear input for "already used as opener" error
+          if (response.error && response.error.includes('as opener')) {
+            useGameStore.getState().clearInput();
+          }
           reject(new Error(response.error));
         }
       });
