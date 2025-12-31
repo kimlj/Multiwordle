@@ -379,6 +379,20 @@ io.on('connection', (socket) => {
         room.hostId = socket.id;
       }
 
+      // If room is in lobby state, reset game-specific data (scores, guesses)
+      // to prevent old scores from carrying over to new games
+      if (room.state === 'lobby') {
+        playerData.totalScore = 0;
+        playerData.roundScore = 0;
+        playerData.guesses = [];
+        playerData.results = [];
+        playerData.solved = false;
+        playerData.solvedAt = null;
+        playerData.solvedInGuesses = 0;
+        playerData.returnedToLobby = false;
+        playerData.ready = false;
+      }
+
       // Add player back to room with their existing data
       room.players.set(socket.id, {
         ...playerData,
