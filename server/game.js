@@ -212,10 +212,8 @@ export class GameRoom {
         player.guesses.push(this.mirrorOpener);
         player.results.push(result);
 
-        // Track opener for Fresh Openers mode
-        if (!player.usedOpeners.includes(this.mirrorOpener)) {
-          player.usedOpeners.push(this.mirrorOpener);
-        }
+        // Note: Mirror opener is NOT tracked for Fresh Openers mode
+        // The player's "real" opener is their second guess when mirror match is on
 
         // Check if opener solved it (unlikely but possible)
         const colors = countColors(result);
@@ -259,9 +257,11 @@ export class GameRoom {
       return { success: false, error: 'Not a valid word' };
     }
 
-    // Fresh Openers Only: Block reused openers on first guess
-    const isFirstGuess = player.guesses.length === 0;
-    if (this.settings.freshOpenersOnly && isFirstGuess && player.usedOpeners.includes(upperGuess)) {
+    // Fresh Openers Only: Block reused openers
+    // If mirror match is on, the "opener" is the second guess (first is auto-filled)
+    const openerGuessIndex = this.settings.mirrorMatch ? 1 : 0;
+    const isOpenerGuess = player.guesses.length === openerGuessIndex;
+    if (this.settings.freshOpenersOnly && isOpenerGuess && player.usedOpeners.includes(upperGuess)) {
       return { success: false, error: `Already used ${upperGuess} as opener!` };
     }
 
@@ -269,7 +269,7 @@ export class GameRoom {
     const colors = countColors(result);
 
     // Track opener for Fresh Openers mode
-    if (isFirstGuess && !player.usedOpeners.includes(upperGuess)) {
+    if (isOpenerGuess && !player.usedOpeners.includes(upperGuess)) {
       player.usedOpeners.push(upperGuess);
     }
 
