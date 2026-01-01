@@ -72,7 +72,7 @@ export default function GameScreen({ showResults = false }) {
   const [showItemRoundPopup, setShowItemRoundPopup] = useState(false);
   const [lastItemRound, setLastItemRound] = useState(null);
 
-  // Show centered popup when Item Round starts, auto-hide after 3s or tap to dismiss
+  // Show centered popup when Item Round starts, auto-hide after 3s or tap/keypress to dismiss
   useEffect(() => {
     if (gameState?.isItemRound && gameState?.currentRound !== lastItemRound) {
       setLastItemRound(gameState.currentRound);
@@ -83,6 +83,14 @@ export default function GameScreen({ showResults = false }) {
       return () => clearTimeout(timer);
     }
   }, [gameState?.isItemRound, gameState?.currentRound, lastItemRound]);
+
+  // Dismiss Item Round popup on any keypress
+  useEffect(() => {
+    if (!showItemRoundPopup) return;
+    const handleKeyDown = () => setShowItemRoundPopup(false);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showItemRoundPopup]);
 
   // Close host menu when clicking outside
   useEffect(() => {
