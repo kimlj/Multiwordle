@@ -267,24 +267,34 @@ export default function GameScreen({ showResults = false }) {
   const canType = !showResults && !isEliminated && !playerState?.solved && playerState?.guesses?.length < maxGuesses;
 
   return (
-    <div className="h-[100dvh] flex flex-col p-2 sm:p-4 overflow-hidden">
+    <div className="h-[100dvh] flex flex-col p-2 sm:p-3 overflow-hidden bg-gradient-to-br from-[#0a0a12] via-[#0d0d18] to-[#080810] relative">
+      {/* Ambient glow effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-wordle-green/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-purple-500/5 rounded-full blur-[100px]" />
+      </div>
       {/* Compact Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 relative z-20">
         <div className="flex items-center gap-2">
-          <div className="glass rounded-lg px-2 py-1">
-            <div className="text-[10px] text-white/40">Round</div>
-            <div className="font-bold text-sm">
+          {/* Round */}
+          <div className="glass rounded-md px-2 py-1 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="font-bold text-sm">
               {isBattleRoyale
                 ? `${gameState.currentRound}`
                 : `${gameState.currentRound}/${gameState.totalRounds}`}
-            </div>
+            </span>
           </div>
 
           {/* Battle Royale: Show active players count */}
           {isBattleRoyale && (
-            <div className="glass rounded-lg px-2 py-1 border border-red-500/50">
-              <div className="text-[10px] text-red-400">Alive</div>
-              <div className="font-bold text-sm text-red-400">{activePlayers.length}/{players.length}</div>
+            <div className="glass rounded-md px-2 py-1 flex items-center gap-1.5 border border-red-500/50">
+              <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+              </svg>
+              <span className="font-bold text-sm text-red-400">{activePlayers.length}/{players.length}</span>
             </div>
           )}
 
@@ -296,34 +306,32 @@ export default function GameScreen({ showResults = false }) {
                   e.stopPropagation();
                   setShowHostMenu(!showHostMenu);
                 }}
-                className="glass rounded-lg px-2 py-1 hover:bg-white/10"
+                className="glass rounded-md px-2 py-1 hover:bg-white/10 flex items-center gap-1"
               >
-                <div className="text-[10px] text-wordle-yellow">HOST</div>
-                <div className="font-bold text-xs flex items-center gap-1">
-                  Menu ▼
-                </div>
+                <span className="text-sm text-wordle-yellow">⚙</span>
+                <span className="text-xs text-white/50">▼</span>
               </button>
 
               {showHostMenu && (
-                <div className="absolute top-full left-0 mt-1 glass rounded-lg p-1.5 min-w-[120px] z-50">
+                <div className="absolute top-full left-0 mt-1 glass rounded-lg p-1.5 min-w-[110px] z-50">
                   <button
                     onClick={() => { forceEndRound(); setShowHostMenu(false); }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-white/10 rounded text-xs"
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded text-xs"
                   >
                     End Round
                   </button>
                   <button
                     onClick={() => { endGame(); setShowHostMenu(false); }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-white/10 rounded text-xs text-red-400"
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded text-xs text-red-400"
                   >
                     End Game
                   </button>
                   {powerUpsEnabled && (
                     <button
                       onClick={() => { debugGiveAllItems().then(() => showToast('All items given!')).catch(e => showToast(e.message)); setShowHostMenu(false); }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 rounded text-xs text-purple-400"
+                      className="w-full text-left px-2.5 py-1.5 hover:bg-white/10 rounded text-xs text-purple-400"
                     >
-                      🧪 Give All Items
+                      🧪 Items
                     </button>
                   )}
                 </div>
@@ -335,37 +343,34 @@ export default function GameScreen({ showResults = false }) {
           {otherPlayers.length > 0 && (
             <button
               onClick={() => setShowOtherPlayers(!showOtherPlayers)}
-              className={`glass rounded-lg px-2 py-1 text-xs ${showOtherPlayers ? 'bg-white/20' : ''}`}
+              className={`glass rounded-md px-2 py-1 flex items-center gap-1.5 ${showOtherPlayers ? 'bg-white/20' : ''}`}
             >
-              <div className="text-[10px] text-white/40">Players</div>
-              <div className="font-bold">{showOtherPlayers ? 'Hide' : 'Show'} ({otherPlayers.length})</div>
+              <svg className="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span className="font-bold text-xs">{otherPlayers.length}</span>
             </button>
           )}
 
-          {/* Item Round indicator in header */}
+          {/* Item Round indicator */}
           {powerUpsEnabled && gameState.isItemRound && gameState.currentChallenge && gameState.state === 'playing' && !showResults && (
             <div className="relative">
               <button
                 onClick={() => setItemRoundExpanded(!itemRoundExpanded)}
-                className="glass rounded-lg px-2 py-1 text-xs border border-purple-500/50 bg-purple-500/10"
+                className="glass rounded-md px-2 py-1 flex items-center gap-1.5 border border-purple-500/50 bg-purple-500/10"
               >
-                <div className="flex items-center gap-1">
-                  <span className="text-purple-300">{gameState.currentChallenge.emoji}</span>
-                  <span className="text-[10px] text-purple-300 font-medium">ITEM</span>
-                  <span className="text-white/40 text-[10px]">{itemRoundExpanded ? '▲' : '▼'}</span>
-                </div>
+                <span className="text-sm">{gameState.currentChallenge.emoji}</span>
+                <span className="text-xs text-white/40">{itemRoundExpanded ? '▲' : '▼'}</span>
               </button>
-              {/* Dropdown */}
               {itemRoundExpanded && (
                 <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] animate-fade-in">
                   <div className="rounded-lg px-3 py-2 border border-purple-500 bg-[#1a1a2e] shadow-lg text-left">
                     <div className="text-[10px] text-purple-300 font-medium mb-1">ITEM ROUND</div>
-                    <div className="text-[11px] text-white/90 mb-1.5">
+                    <div className="text-xs text-white/90 mb-1.5">
                       {gameState.currentChallenge.emoji} {gameState.currentChallenge.description}
                     </div>
                     <div className="text-[10px] text-white/50 border-t border-white/10 pt-1.5">
                       <span className="text-white/70">Reward:</span> {gameState.itemRoundReward?.emoji} {gameState.itemRoundReward?.name}
-                      <div className="text-white/60 mt-0.5">{ITEM_INFO[gameState.itemRoundReward?.id]?.desc || ''}</div>
                     </div>
                   </div>
                 </div>
@@ -376,20 +381,22 @@ export default function GameScreen({ showResults = false }) {
 
         <div className="flex items-center gap-2">
           {/* Timer */}
-          <div className={`glass rounded-lg px-2 py-1 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20' : isCriticalRound ? 'border border-red-500' : ''}`}>
-            <div className="text-[10px] text-white/40">{isBonusTime ? '⏰ Bonus' : 'Time'}</div>
-            <div className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
+          <div className={`glass rounded-md px-2 py-1 flex items-center gap-1.5 transition-all duration-300 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : isCriticalRound ? 'border border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse' : ''}`}>
+            <svg className={`w-3.5 h-3.5 ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'text-red-400' : 'text-white/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
               {formatTime(roundTimeRemaining)}
-            </div>
+            </span>
           </div>
 
           {/* Info Button */}
           <button
             onClick={() => setShowInfo(true)}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10 transition-colors"
             title="Game Info"
           >
-            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-white/40 hover:text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
@@ -397,10 +404,10 @@ export default function GameScreen({ showResults = false }) {
           {/* Leave Button */}
           <button
             onClick={() => setShowLeaveConfirm(true)}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-colors"
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/20 transition-colors"
             title="Leave Game"
           >
-            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-white/40 hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
           </button>
@@ -419,7 +426,7 @@ export default function GameScreen({ showResults = false }) {
 
 
       {/* Main Grid Area */}
-      <div className="flex-1 overflow-auto flex flex-col items-center justify-center">
+      <div className="flex-1 overflow-auto flex flex-col items-center justify-center relative z-10">
         {/* Eliminated players see spectator view */}
         {isEliminated && !showResults && spectatorState && (
           <div className="w-full">
@@ -451,19 +458,23 @@ export default function GameScreen({ showResults = false }) {
         {/* Solo view - Large grid centered (only for non-eliminated players) */}
         {!isEliminated && !showOtherPlayers && (
           <div className={`flex items-center justify-center ${hasFlip ? 'rotate-180' : ''}`}>
-            <WordleGrid
-              guesses={playerState?.guesses || []}
-              results={hasInvisibleInk ? [] : (playerState?.results || [])}
-              currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
-              maxGuesses={playerState?.hasSecondChance ? 7 : 6}
-              isCurrentPlayer={true}
-              playerName={currentPlayer?.name || 'You'}
-              solved={playerState?.solved || false}
-              score={playerState?.roundScore || 0}
-              large={true}
-              revealedLetters={revealedLetters}
-              hideColors={hasInvisibleInk}
-            />
+            <div className="relative">
+              {/* Subtle glow behind grid */}
+              <div className="absolute inset-0 bg-gradient-to-b from-wordle-green/10 to-transparent rounded-xl blur-xl scale-110 opacity-50" />
+              <WordleGrid
+                guesses={playerState?.guesses || []}
+                results={hasInvisibleInk ? [] : (playerState?.results || [])}
+                currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
+                maxGuesses={playerState?.hasSecondChance ? 7 : 6}
+                isCurrentPlayer={true}
+                playerName={currentPlayer?.name || 'You'}
+                solved={playerState?.solved || false}
+                score={playerState?.roundScore || 0}
+                large={true}
+                revealedLetters={revealedLetters}
+                hideColors={hasInvisibleInk}
+              />
+            </div>
           </div>
         )}
 
@@ -508,7 +519,7 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className={`mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4 ${hasFlip ? 'rotate-180' : ''}`}>
+        <div className={`mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4 relative z-10 ${hasFlip ? 'rotate-180' : ''}`}>
           <div className="flex flex-col gap-1.5 items-center max-w-lg mx-auto">
             {displayKeyboard.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1.5 justify-center">
@@ -525,10 +536,10 @@ export default function GameScreen({ showResults = false }) {
                         h-12 sm:h-14 rounded-lg font-bold
                         transition-all active:scale-95
                         ${hasBlindfold ? 'bg-white/10 text-transparent' :
-                          status === 'correct' ? 'bg-wordle-green text-white' :
-                          status === 'present' ? 'bg-wordle-yellow text-white' :
-                          status === 'absent' ? 'bg-white/10 text-white/30' :
-                          'bg-white/20 text-white hover:bg-white/30'}
+                          status === 'correct' ? 'bg-wordle-green text-white shadow-[0_0_12px_rgba(106,170,100,0.4)]' :
+                          status === 'present' ? 'bg-wordle-yellow text-white shadow-[0_0_12px_rgba(201,180,88,0.4)]' :
+                          status === 'absent' ? 'bg-white/5 text-white/30 border border-white/5' :
+                          'bg-white/10 text-white hover:bg-white/20 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-white/10'}
                       `}
                     >
                       {hasBlindfold ? (isWide ? '' : '') : (key === 'DEL' ? '⌫' : key)}
@@ -698,7 +709,7 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Floating Inventory Panel - starts from top, grows downward */}
       {powerUpsEnabled && !showResults && !isEliminated && gameState.state === 'playing' && inventory.length > 0 && (
-        <div className="fixed right-[0.4rem] top-[6rem] flex flex-col gap-1 z-40 max-h-[70vh] overflow-y-auto">
+        <div className="fixed right-[0.4rem] top-[6rem] flex flex-col gap-1.5 z-40 max-h-[70vh] overflow-y-auto">
           {inventory.map((item, idx) => {
             const info = ITEM_INFO[item.id];
             const isPassive = info?.passive;
@@ -709,18 +720,19 @@ export default function GameScreen({ showResults = false }) {
                 disabled={currentPlayer?.usedItemThisRound && !isPassive}
                 title={`${info?.name || item.id}${isPassive ? ' (Passive)' : ''}`}
                 className={`
-                  w-[2.6rem] h-[2.6rem] rounded-lg text-lg
+                  w-[2.6rem] h-[2.6rem] rounded-xl text-lg
                   flex items-center justify-center
-                  transition-all transform hover:scale-105 active:scale-95
+                  transition-all transform hover:scale-110 active:scale-95
+                  backdrop-blur-sm border
                   ${info?.legendary
-                    ? 'bg-gradient-to-br from-yellow-500/40 to-amber-600/40 ring-2 ring-yellow-400/60 animate-pulse'
+                    ? 'bg-gradient-to-br from-yellow-500/30 to-amber-600/30 border-yellow-400/50 shadow-[0_0_20px_rgba(234,179,8,0.4)] animate-pulse'
                     : info?.rare
-                      ? 'bg-gradient-to-br from-purple-500/30 to-violet-600/30 ring-1 ring-purple-400/50'
+                      ? 'bg-gradient-to-br from-purple-500/20 to-violet-600/20 border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
                       : isPassive
-                        ? 'bg-blue-500/20'
+                        ? 'bg-blue-500/20 border-blue-400/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
                         : info?.type === 'sabotage'
-                          ? 'bg-red-500/20 hover:bg-red-500/40'
-                          : 'bg-green-500/20 hover:bg-green-500/40'}
+                          ? 'bg-red-500/20 border-red-400/30 hover:bg-red-500/30 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                          : 'bg-green-500/20 border-green-400/30 hover:bg-green-500/30 hover:shadow-[0_0_15px_rgba(34,197,94,0.3)]'}
                   ${currentPlayer?.usedItemThisRound && !isPassive ? 'opacity-40 cursor-not-allowed' : ''}
                 `}
               >
@@ -734,44 +746,43 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Target Picker Modal - Grid View */}
       {showTargetPicker && selectedItem && (
-        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-3 pt-[env(safe-area-inset-top)]">
-          <div className="flex items-center justify-between mb-3 shrink-0">
-            <div>
+        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-2 pt-[env(safe-area-inset-top)]">
+          <div className="mb-2 shrink-0">
+            <div className="flex items-center justify-between">
               <span className="text-xs text-white/50">
-                {ITEM_INFO[selectedItem.id]?.emoji} {ITEM_INFO[selectedItem.id]?.name} · tap a player
+                {ITEM_INFO[selectedItem.id]?.emoji} {ITEM_INFO[selectedItem.id]?.name} - tap a player
               </span>
-              <div className="text-[10px] text-white/30">{ITEM_INFO[selectedItem.id]?.desc}</div>
+              <button
+                onClick={() => { setShowTargetPicker(false); setSelectedItem(null); }}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center"
+              >
+                ×
+              </button>
             </div>
-            <button
-              onClick={() => { setShowTargetPicker(false); setSelectedItem(null); }}
-              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center"
-            >
-              ×
-            </button>
+            <div className="text-[10px] text-white/30 text-center mt-1">{ITEM_INFO[selectedItem.id]?.desc}</div>
           </div>
-          <div className="flex-1 overflow-y-auto py-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl mx-auto">
+          <div className="flex-1 overflow-y-auto py-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-3xl mx-auto px-1">
               {otherPlayers.filter(p => !p.eliminated && !p.solved).map((player) => (
                 <button
                   key={player.id}
                   onClick={() => handleTargetSelect(player.id)}
-                  className="flex flex-col items-center hover:bg-red-500/10 rounded-lg p-2 transition-all group"
+                  className="flex flex-col items-center hover:bg-red-500/10 rounded-lg p-1.5 transition-all group"
                 >
                   <div className="text-xs font-medium mb-1 truncate w-full text-center group-hover:text-red-400">
                     {player.name}
                   </div>
-                  <div className="transform scale-[0.85] origin-top">
-                    <WordleGrid
-                      guesses={[]}
-                      results={[]}
-                      currentInput=""
-                      isCurrentPlayer={false}
-                      playerName=""
-                      solved={player.solved}
-                      score={player.roundScore}
-                      guessResults={player.guessResults || []}
-                    />
-                  </div>
+                  <WordleGrid
+                    guesses={[]}
+                    results={[]}
+                    currentInput=""
+                    isCurrentPlayer={false}
+                    playerName=""
+                    solved={player.solved}
+                    score={player.roundScore}
+                    guessResults={player.guessResults || []}
+                    medium={true}
+                  />
                 </button>
               ))}
             </div>

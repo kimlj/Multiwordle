@@ -344,15 +344,15 @@ export default function HomeScreen() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
-      {/* Burger Menu Button */}
+      {/* Menu Button */}
       <button
         onClick={() => setShowInfo(true)}
-        className="absolute top-4 right-4 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+        className="absolute top-4 right-4 w-10 h-10 flex flex-col items-center justify-center gap-1.5 group"
         title="Game Info"
       >
-        <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <span className="w-5 h-0.5 bg-white/40 rounded-full transition-all group-hover:bg-white/70"></span>
+        <span className="w-5 h-0.5 bg-white/40 rounded-full transition-all group-hover:bg-white/70"></span>
+        <span className="w-5 h-0.5 bg-white/40 rounded-full transition-all group-hover:bg-white/70"></span>
       </button>
 
       <div className="text-center mb-12">

@@ -11,6 +11,7 @@ export default function WordleGrid({
   score = 0,
   guessResults = [],
   large = false, // Large mode for solo view
+  medium = false, // Medium mode for target selection
   hideColors = false, // Hide colors for invisible ink effect
   revealedLetters = {} // { position: letter } - revealed letters to show in current row
 }) {
@@ -58,14 +59,16 @@ export default function WordleGrid({
         }
       }
 
-      // Cell size based on large prop and number of rows
+      // Cell size based on large/medium prop and number of rows
       // Make cells smaller when 7 rows to keep grid compact
       const isCompact = maxGuesses > 6;
       const cellSize = large
         ? (isCompact
             ? 'w-[52px] h-[52px] sm:w-[58px] sm:h-[58px] text-2xl sm:text-3xl'
             : 'w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] text-3xl sm:text-4xl')
-        : 'w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm';
+        : medium
+          ? 'w-8 h-8 sm:w-9 sm:h-9 text-sm sm:text-base'
+          : 'w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm';
 
       cells.push(
         <div
@@ -92,8 +95,9 @@ export default function WordleGrid({
 
     // Reduce gaps when compact (7 rows)
     const isCompact = maxGuesses > 6;
+    const gapSize = large ? (isCompact ? 'gap-1' : 'gap-1.5') : medium ? 'gap-1' : 'gap-0.5';
     rows.push(
-      <div key={i} className={`flex ${large ? (isCompact ? 'gap-1' : 'gap-1.5') : 'gap-0.5'} justify-center`}>
+      <div key={i} className={`flex ${gapSize} justify-center`}>
         {cells}
       </div>
     );
@@ -104,15 +108,15 @@ export default function WordleGrid({
   return (
     <div className="flex flex-col items-center">
       {/* Player name */}
-      <div className={`${large ? 'text-sm sm:text-base mb-1' : 'text-[10px] sm:text-xs mb-0.5'} font-bold truncate max-w-full flex items-center gap-1 ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/70'}`}>
-        <span className={`truncate ${large ? 'max-w-[120px]' : 'max-w-[60px] sm:max-w-[80px]'}`}>{playerName}</span>
+      <div className={`${large ? 'text-sm sm:text-base mb-1' : medium ? 'text-xs sm:text-sm mb-0.5' : 'text-[10px] sm:text-xs mb-0.5'} font-bold truncate max-w-full flex items-center gap-1 ${isCurrentPlayer ? 'text-wordle-green' : 'text-white/70'}`}>
+        <span className={`truncate ${large ? 'max-w-[120px]' : medium ? 'max-w-[80px] sm:max-w-[100px]' : 'max-w-[60px] sm:max-w-[80px]'}`}>{playerName}</span>
         {isCurrentPlayer && <span className={large ? 'text-xs' : 'text-[8px]'}>(You)</span>}
         {solved && <span className="text-wordle-green">✓</span>}
         {score > 0 && <span className={`text-wordle-green ${large ? 'text-xs' : 'text-[8px]'}`}>+{score}</span>}
       </div>
 
       {/* Grid - no container */}
-      <div className={`flex flex-col ${large ? (isCompact ? 'gap-1 p-0.5' : 'gap-1.5 p-1') : 'gap-0.5 p-0.5'} ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded' : ''}`}>
+      <div className={`flex flex-col ${large ? (isCompact ? 'gap-1 p-0.5' : 'gap-1.5 p-1') : medium ? 'gap-1 p-0.5' : 'gap-0.5 p-0.5'} ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded' : ''}`}>
         {rows}
       </div>
     </div>
