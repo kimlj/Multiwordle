@@ -339,8 +339,8 @@ export function useSocket() {
       });
 
       // Mirror Shield prompt - show when sabotaged and have mirror shield
-      socket.on('mirrorShieldPrompt', ({ attacker, item }) => {
-        useGameStore.getState().setMirrorShieldPrompt({ attacker, item });
+      socket.on('mirrorShieldPrompt', ({ attacker, item, isCounterReflect }) => {
+        useGameStore.getState().setMirrorShieldPrompt({ attacker, item, isCounterReflect });
       });
 
       // Broadcast when any player earns an item (visible to all)

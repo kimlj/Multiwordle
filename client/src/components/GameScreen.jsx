@@ -922,12 +922,20 @@ export default function GameScreen({ showResults = false }) {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
             <div className="text-4xl mb-3">🪞</div>
-            <h3 className="text-xl font-bold mb-2 text-red-400">Incoming Attack!</h3>
+            <h3 className="text-xl font-bold mb-2 text-red-400">
+              {mirrorShieldPrompt.isCounterReflect ? 'Reflected Back!' : 'Incoming Attack!'}
+            </h3>
             <p className="text-white/70 mb-4">
-              <span className="font-bold text-white">{mirrorShieldPrompt.attacker}</span> used{' '}
-              <span className="font-bold text-red-400">{mirrorShieldPrompt.item?.emoji} {mirrorShieldPrompt.item?.name}</span> on you!
+              <span className="font-bold text-white">{mirrorShieldPrompt.attacker}</span>{' '}
+              {mirrorShieldPrompt.isCounterReflect ? 'reflected' : 'used'}{' '}
+              <span className="font-bold text-red-400">{mirrorShieldPrompt.item?.emoji} {mirrorShieldPrompt.item?.name}</span>
+              {mirrorShieldPrompt.isCounterReflect ? ' back at you!' : ' on you!'}
             </p>
-            <p className="text-purple-300 mb-4">Use Mirror Shield to reflect it back?</p>
+            <p className="text-purple-300 mb-4">
+              {mirrorShieldPrompt.isCounterReflect
+                ? 'Counter-reflect it back? (Final bounce)'
+                : 'Use Mirror Shield to reflect it back?'}
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -943,7 +951,7 @@ export default function GameScreen({ showResults = false }) {
                 }}
                 className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
               >
-                🪞 Reflect!
+                {mirrorShieldPrompt.isCounterReflect ? '🪞 Counter!' : '🪞 Reflect!'}
               </button>
             </div>
           </div>

@@ -41,7 +41,8 @@ const gameManager = new GameManager();
 const playerRooms = new Map(); // playerId -> roomCode
 
 // Store pending sabotages awaiting mirror shield response
-// Map: targetPlayerId -> { attackerId, itemId, item, roomCode, timestamp }
+// Map: targetPlayerId -> { attackerId, itemId, item, roomCode, timestamp, bounceCount }
+// bounceCount tracks reflections: 0 = first reflection, 1 = counter-reflect (max)
 const pendingSabotages = new Map();
 
 // Timer management
@@ -1192,7 +1193,8 @@ io.on('connection', (socket) => {
           itemId,
           item: result.item,
           roomCode,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          bounceCount: 0 // First reflection attempt
         });
 
         // Send prompt to target
@@ -1367,31 +1369,61 @@ io.on('connection', (socket) => {
           blocked: isBlocked
         });
 
-        // Notify attacker their attack was reflected/blocked
-        const attackerSocket = io.sockets.sockets.get(pending.attackerId);
-        if (attackerSocket) {
-          attackerSocket.emit('mirrorReflected', {
-            reflectedBy: target.name,
+        // Check if attacker can counter-reflect (has mirror shield AND bounce limit not reached)
+        const canCounterReflect = !isBlocked &&
+          pending.bounceCount < 1 &&
+          attacker.inventory.some(i => i.id === 'mirror_shield');
+
+        if (canCounterReflect) {
+          // Attacker has mirror shield - give them a chance to counter-reflect
+          pendingSabotages.set(pending.attackerId, {
+            attackerId: socket.id, // Original target is now the "attacker"
+            itemId: pending.itemId,
             item: pending.item,
-            blocked: isBlocked
+            roomCode,
+            timestamp: Date.now(),
+            bounceCount: pending.bounceCount + 1 // Increment bounce count
           });
 
-          // Apply effect to attacker (only if not just blocked)
-          if (!isBlocked && result.effect && result.effect.duration) {
-            attackerSocket.emit('activeEffect', {
-              effect: pending.itemId,
-              duration: result.effect.duration,
-              data: null
-            });
-            attackerSocket.emit('sabotaged', {
+          // Notify attacker they can counter-reflect
+          const attackerSocket = io.sockets.sockets.get(pending.attackerId);
+          if (attackerSocket) {
+            attackerSocket.emit('mirrorShieldPrompt', {
+              attacker: target.name,
               item: pending.item,
-              fromPlayer: target.name
+              isCounterReflect: true
             });
           }
-        }
 
-        io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
-        if (callback) callback({ success: true, reflected: true, blocked: isBlocked });
+          io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+          if (callback) callback({ success: true, reflected: true, awaitingCounterReflect: true });
+        } else {
+          // No counter-reflect possible - apply effect to attacker
+          const attackerSocket = io.sockets.sockets.get(pending.attackerId);
+          if (attackerSocket) {
+            attackerSocket.emit('mirrorReflected', {
+              reflectedBy: target.name,
+              item: pending.item,
+              blocked: isBlocked
+            });
+
+            // Apply effect to attacker (only if not just blocked)
+            if (!isBlocked && result.effect && result.effect.duration) {
+              attackerSocket.emit('activeEffect', {
+                effect: pending.itemId,
+                duration: result.effect.duration,
+                data: null
+              });
+              attackerSocket.emit('sabotaged', {
+                item: pending.item,
+                fromPlayer: target.name
+              });
+            }
+          }
+
+          io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+          if (callback) callback({ success: true, reflected: true, blocked: isBlocked });
+        }
       } else {
         if (callback) callback(result);
       }

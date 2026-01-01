@@ -40,7 +40,7 @@ export const useGameStore = create((set, get) => ({
   itemEarningNotifications: [], // [{ playerName, item, trigger, challenge }] - shows when others earn items
   xrayBoards: null, // { playerId: { name, guesses, results, solved } } - X-Ray Vision data
   showSecondChancePrompt: false, // Show prompt to activate Second Chance after 6 guesses
-  mirrorShieldPrompt: null, // { attacker, item } - Show prompt when sabotaged with mirror shield
+  mirrorShieldPrompt: null, // { attacker, item, isCounterReflect } - Show prompt when sabotaged with mirror shield
 
   // Timers
   roundTimeRemaining: 0,
