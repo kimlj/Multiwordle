@@ -26,10 +26,12 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   const players = Object.values(gameState.players);
 
   // When waiting for others, only check readiness of returned players
+  // Host doesn't need to ready - only other players do
   const returnedPlayers = waitingForOthers
     ? players.filter(p => p.returnedToLobby)
     : players;
-  const allReady = returnedPlayers.every(p => p.ready) && returnedPlayers.length >= 1;
+  const nonHostPlayers = returnedPlayers.filter(p => p.id !== gameState.hostId);
+  const allReady = nonHostPlayers.every(p => p.ready) && returnedPlayers.length >= 1;
   const numRounds = gameState.settings.rounds;
 
   // Initialize custom words array when rounds change
@@ -215,7 +217,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     key={player.id}
                     className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all ${
                       player.id === playerId ? 'bg-wordle-green/10' : 'bg-white/5'
-                    } ${player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
+                    } ${player.id !== gameState.hostId && player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       {player.id === gameState.hostId && (
@@ -253,9 +255,12 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
-                        {player.ready ? '✓' : '○'}
-                      </span>
+                      {/* Host doesn't participate in ready system */}
+                      {player.id !== gameState.hostId && (
+                        <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
+                          {player.ready ? '✓' : '○'}
+                        </span>
+                      )}
                       {player.id !== playerId && (
                         <button
                           onClick={() => kickPlayer(player.id).catch(err => showToast(err.message))}
@@ -588,7 +593,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     key={player.id}
                     className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all ${
                       player.id === playerId ? 'bg-wordle-green/10' : 'bg-white/5'
-                    } ${player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
+                    } ${player.id !== gameState.hostId && player.ready ? 'border border-wordle-green/50' : 'border border-transparent'}`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       {player.id === gameState.hostId && (
@@ -625,9 +630,12 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                       )}
                     </div>
 
-                    <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
-                      {player.ready ? '✓' : '○'}
-                    </span>
+                    {/* Host doesn't participate in ready system */}
+                    {player.id !== gameState.hostId && (
+                      <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
+                        {player.ready ? '✓' : '○'}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

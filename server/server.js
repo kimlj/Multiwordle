@@ -514,11 +514,13 @@ io.on('connection', (socket) => {
   // Create a new room
   socket.on('createRoom', ({ playerName, settings, persistentId }, callback) => {
     const room = gameManager.createRoom(socket.id, playerName, settings);
-    // Store persistentId on the player
+    // Store persistentId on the player and track original host
     const player = room.players.get(socket.id);
     if (player) {
       player.persistentId = persistentId;
     }
+    // Track the original creator for host transfer back
+    room.originalHostPersistentId = persistentId;
     playerRooms.set(socket.id, room.roomCode);
     socket.join(room.roomCode);
 
@@ -573,6 +575,12 @@ io.on('connection', (socket) => {
     const player = room.players.get(socket.id);
     if (player) {
       player.persistentId = persistentId;
+    }
+
+    // Transfer host back to original creator if they're joining
+    if (persistentId && room.originalHostPersistentId === persistentId) {
+      room.hostId = socket.id;
+      console.log(`Host transferred back to original creator: ${playerName}`);
     }
 
     // Cancel any pending room deletion
@@ -651,8 +659,14 @@ io.on('connection', (socket) => {
       // Restore the player with their data
       const playerData = disconnectedPlayer.playerData;
 
-      // Restore host status if they were the host
-      if (disconnectedPlayer.wasHost) {
+      // Transfer host back to original creator if they're rejoining
+      // This takes priority over current host
+      if (persistentId && room.originalHostPersistentId === persistentId) {
+        room.hostId = socket.id;
+        console.log(`Host transferred back to original creator: ${playerName}`);
+      }
+      // Otherwise restore host status if they were the host when they disconnected
+      else if (disconnectedPlayer.wasHost) {
         room.hostId = socket.id;
       }
 
@@ -667,8 +681,8 @@ io.on('connection', (socket) => {
         playerData.solvedAt = null;
         playerData.solvedInGuesses = 0;
         playerData.returnedToLobby = false;
-        // Host is always auto-ready
-        playerData.ready = disconnectedPlayer.wasHost;
+        // Host doesn't participate in ready system
+        playerData.ready = false;
       }
 
       // If room is in a different round than when player disconnected, reset their round data
@@ -753,13 +767,19 @@ io.on('connection', (socket) => {
       // Check if this was the host
       const wasHost = room.hostId === oldSocketId;
 
-      // Restore host status if they were the host
-      if (wasHost) {
+      // Transfer host back to original creator if they're rejoining
+      // This takes priority over current host
+      if (persistentId && room.originalHostPersistentId === persistentId) {
+        room.hostId = socket.id;
+        console.log(`Host transferred back to original creator: ${playerName}`);
+      }
+      // Otherwise restore host status if they were the host
+      else if (wasHost) {
         room.hostId = socket.id;
       }
 
-      // In lobby state, host should always be ready
-      const playerReady = room.state === 'lobby' && wasHost ? true : existingPlayer.ready;
+      // Host doesn't participate in ready system
+      const playerReady = existingPlayer.ready;
 
       // Add player back with new socket id
       room.players.set(socket.id, {
@@ -947,10 +967,7 @@ io.on('connection', (socket) => {
 
         for (const p of room.players.values()) {
           // Preserve ready state - players who clicked ready while waiting should stay ready
-          // Host is always auto-ready
-          if (p.id === room.hostId) {
-            p.ready = true;
-          }
+          // Host doesn't participate in ready system, skip setting ready for host
           // Keep existing ready state for other players (don't reset to false)
           p.guesses = [];
           p.results = [];
@@ -1680,9 +1697,12 @@ io.on('connection', (socket) => {
     room.roundScores = [];
 
     for (const player of room.players.values()) {
-      // Set ALL players as ready when game is reset via endGame
+      // Set non-host players as ready when game is reset via endGame
       // This allows the host to immediately start a new game
-      player.ready = true;
+      // Host doesn't participate in ready system
+      if (player.id !== room.hostId) {
+        player.ready = true;
+      }
       player.guesses = [];
       player.results = [];
       player.solved = false;
@@ -1730,10 +1750,7 @@ io.on('connection', (socket) => {
     }
 
     player.returnedToLobby = true;
-    // Host is always auto-ready
-    if (socket.id === room.hostId) {
-      player.ready = true;
-    }
+    // Host doesn't participate in ready system
 
     // Check if all players have returned to lobby
     const allReturned = [...room.players.values()].every(p => p.returnedToLobby);
@@ -1747,10 +1764,7 @@ io.on('connection', (socket) => {
 
       for (const p of room.players.values()) {
         // Preserve ready state - players who clicked ready while waiting should stay ready
-        // Host is always auto-ready
-        if (p.id === room.hostId) {
-          p.ready = true;
-        }
+        // Host doesn't participate in ready system
         // Keep existing ready state for other players (don't reset to false)
         p.guesses = [];
         p.results = [];
@@ -1854,8 +1868,7 @@ io.on('connection', (socket) => {
             room.roundScores = [];
 
             for (const p of room.players.values()) {
-              // Preserve ready state, only ensure host is ready
-              if (p.id === room.hostId) p.ready = true;
+              // Preserve ready state - host doesn't participate in ready system
               p.guesses = [];
               p.results = [];
               p.solved = false;

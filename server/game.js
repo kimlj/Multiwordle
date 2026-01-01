@@ -224,6 +224,7 @@ export class GameRoom {
   constructor(roomCode, hostId, hostName, settings = {}) {
     this.roomCode = roomCode;
     this.hostId = hostId;
+    this.originalHostPersistentId = null; // Track original creator for host transfer back
     this.players = new Map();
     this.observers = [];
     this.settings = {
@@ -261,13 +262,11 @@ export class GameRoom {
   addPlayer(playerId, playerName) {
     if (this.state !== 'lobby') return false;
 
-    // Host is automatically ready
-    const isHost = playerId === this.hostId;
-
+    // Host doesn't participate in ready system - only other players need to ready
     this.players.set(playerId, {
       id: playerId,
       name: playerName,
-      ready: isHost, // Host is auto-ready
+      ready: false, // Everyone starts not ready; host is skipped in ready checks
       guesses: [],
       results: [],
       solved: false,
@@ -331,7 +330,9 @@ export class GameRoom {
   
   allPlayersReady() {
     if (this.players.size < 1) return false;
+    // Host doesn't need to ready - only other players do
     for (const player of this.players.values()) {
+      if (player.id === this.hostId) continue; // Skip host
       if (!player.ready) return false;
     }
     return true;
@@ -867,6 +868,7 @@ export class GameRoom {
       const target = this.players.get(targetId);
       if (!target) return { success: false, error: 'Target not found' };
       if (target.eliminated) return { success: false, error: 'Cannot target eliminated players' };
+      if (target.solved) return { success: false, error: 'Cannot target players who finished' };
       if (targetId === playerId) return { success: false, error: 'Cannot target yourself' };
 
       // Check if target has Mirror Shield in inventory (will prompt them)

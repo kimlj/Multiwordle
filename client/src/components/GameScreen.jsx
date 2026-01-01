@@ -10,7 +10,11 @@ const KEYBOARD_ROWS = [
   ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'DEL']
 ];
 
-const LETTER_PICKER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const LETTER_PICKER_ROWS = [
+  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+  ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+];
 
 // Item definitions for UI
 const ITEM_INFO = {
@@ -26,7 +30,7 @@ const ITEM_INFO = {
   second_chance: { name: 'Second Chance', emoji: '🔁', type: 'powerup', rare: true, passive: true, desc: 'Auto-prompts on 6th wrong guess' },
   // Legendary
   shield: { name: 'Shield', emoji: '🛡️', type: 'powerup', legendary: true, desc: 'Blocks ALL sabotages for duration' },
-  xray_vision: { name: 'X-Ray Vision', emoji: '👁️', type: 'powerup', legendary: true, desc: 'See all players\' boards for 10s' },
+  xray_vision: { name: 'X-Ray Vision', emoji: '👁️', type: 'powerup', legendary: true, needsConfirm: true, desc: 'See all players\' boards for 10s' },
   identity_theft: { name: 'Identity Theft', emoji: '🔄', type: 'sabotage', needsTarget: true, legendary: true, desc: 'Swap all progress with target' }
 };
 
@@ -70,6 +74,7 @@ export default function GameScreen({ showResults = false }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showTargetPicker, setShowTargetPicker] = useState(false);
   const [showLetterPicker, setShowLetterPicker] = useState(false);
+  const [showXrayConfirm, setShowXrayConfirm] = useState(false);
   const [itemRoundExpanded, setItemRoundExpanded] = useState(false);
   const [showItemRoundPopup, setShowItemRoundPopup] = useState(false);
   const [lastItemRound, setLastItemRound] = useState(null);
@@ -187,8 +192,12 @@ export default function GameScreen({ showResults = false }) {
     } else if (info.needsLetter) {
       setSelectedItem(item);
       setShowLetterPicker(true);
+    } else if (info.needsConfirm) {
+      // Items that need confirmation before use (like X-Ray Vision)
+      setSelectedItem(item);
+      setShowXrayConfirm(true);
     } else {
-      // Direct use items (shield, xray_vision)
+      // Direct use items (shield)
       useItem(item.id).catch(err => showToast(err.message));
     }
   }, [useItem, showToast]);
@@ -261,8 +270,6 @@ export default function GameScreen({ showResults = false }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const roundTimeSeconds = Math.floor(roundTimeRemaining / 1000);
-  const isCriticalRound = roundTimeSeconds < 30;
   const maxGuesses = playerState?.hasSecondChance ? 7 : 6;
   // Guard against undefined playerState - ensure we can type if playerState exists and hasn't solved
   const guessCount = playerState?.guesses?.length ?? 0;
@@ -339,7 +346,11 @@ export default function GameScreen({ showResults = false }) {
           {/* Toggle other players */}
           {otherPlayers.length > 0 && (
             <button
-              onClick={() => setShowOtherPlayers(!showOtherPlayers)}
+              onClick={() => {
+                setShowOtherPlayers(!showOtherPlayers);
+                // Close X-ray overlay when toggling to prevent scroll conflicts
+                useGameStore.getState().setXrayBoards(null);
+              }}
               className={`glass rounded-md px-2 py-1 flex items-center gap-1.5 ${showOtherPlayers ? 'bg-white/20' : ''}`}
             >
               <svg className="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,11 +389,11 @@ export default function GameScreen({ showResults = false }) {
 
         <div className="flex items-center gap-2">
           {/* Timer */}
-          <div className={`glass rounded-md px-2 py-1 flex items-center gap-1.5 transition-all duration-300 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : isCriticalRound ? 'border border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse' : ''}`}>
-            <svg className={`w-3.5 h-3.5 ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'text-red-400' : 'text-white/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className={`glass rounded-md px-2 py-1 flex items-center gap-1.5 transition-all duration-300 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.3)]' : ''}`}>
+            <svg className={`w-3.5 h-3.5 ${isBonusTime ? 'text-purple-400' : 'text-white/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
+            <span className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : ''}`}>
               {formatTime(roundTimeRemaining)}
             </span>
           </div>
@@ -741,30 +752,31 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Target Picker Modal - Grid View */}
       {showTargetPicker && selectedItem && (
-        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-2 pt-[env(safe-area-inset-top)]">
-          <div className="mb-2 shrink-0">
+        <div className="fixed inset-0 bg-black/90 flex flex-col z-50 p-2 pt-[env(safe-area-inset-top)]">
+          <div className="mb-2 shrink-0 bg-[#121213] border border-white/10 rounded-lg px-2.5 py-2 shadow-xl mt-[1vh]">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-white/50">
-                {ITEM_INFO[selectedItem.id]?.emoji} {ITEM_INFO[selectedItem.id]?.name} - tap a player
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg">{ITEM_INFO[selectedItem.id]?.emoji}</span>
+                <span className="font-bold text-red-400 text-sm">{ITEM_INFO[selectedItem.id]?.name}</span>
+                <span className="text-[10px] text-white/40">— tap to target</span>
+              </div>
               <button
                 onClick={() => { setShowTargetPicker(false); setSelectedItem(null); }}
-                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-base"
               >
                 ×
               </button>
             </div>
-            <div className="text-[10px] text-white/30 text-center mt-1">{ITEM_INFO[selectedItem.id]?.desc}</div>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-3xl mx-auto px-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-3xl mx-auto px-1">
               {otherPlayers.filter(p => !p.eliminated && !p.solved).map((player) => (
                 <button
                   key={player.id}
                   onClick={() => handleTargetSelect(player.id)}
-                  className="flex flex-col items-center hover:bg-red-500/10 rounded-lg p-1.5 transition-all group"
+                  className="flex flex-col items-center bg-[#121213] border border-white/10 hover:border-red-500/50 rounded-xl p-2 transition-all group shadow-lg"
                 >
-                  <div className="text-xs font-medium mb-1 truncate w-full text-center group-hover:text-red-400">
+                  <div className="text-sm font-medium mb-1.5 truncate w-full text-center group-hover:text-red-400">
                     {player.name}
                   </div>
                   <WordleGrid
@@ -790,27 +802,95 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Letter Picker Modal */}
       {showLetterPicker && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="glass rounded-2xl p-4 sm:p-6 max-w-md w-full animate-bounce-in">
-            <h3 className="text-xl font-bold mb-2 text-center">🎯 Letter Snipe</h3>
-            <p className="text-white/60 text-center mb-4">Pick a letter to check:</p>
-            <div className="grid grid-cols-7 sm:grid-cols-9 gap-2">
-              {LETTER_PICKER.map((letter) => (
-                <button
-                  key={letter}
-                  onClick={() => handleLetterSelect(letter)}
-                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white/20 hover:bg-white/30 font-bold transition-colors"
-                >
-                  {letter}
-                </button>
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#121213] border border-white/10 rounded-xl p-3 animate-bounce-in shadow-2xl">
+            <div className="flex items-center justify-center gap-1.5 mb-2">
+              <span>🎯</span>
+              <span className="font-bold text-sm">Letter Snipe</span>
+              <span className="text-white/40 text-xs">— pick a letter</span>
+            </div>
+            <div className="flex flex-col gap-1 items-center">
+              {LETTER_PICKER_ROWS.map((row, rowIdx) => (
+                <div key={rowIdx} className="flex gap-1 justify-center">
+                  {row.map((letter) => (
+                    <button
+                      key={letter}
+                      onClick={() => handleLetterSelect(letter)}
+                      className="w-8 h-9 rounded bg-white/10 hover:bg-white/20 font-bold transition-colors text-sm"
+                    >
+                      {letter}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
             <button
               onClick={() => { setShowLetterPicker(false); setSelectedItem(null); }}
-              className="w-full mt-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60"
+              className="w-full mt-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* X-Ray Vision Preview Modal - Browse boards before deciding to use */}
+      {showXrayConfirm && selectedItem && (
+        <div className="fixed inset-0 bg-black/90 flex flex-col z-50 p-2 pt-[env(safe-area-inset-top)]">
+          {/* Header */}
+          <div className="shrink-0 bg-[#121213] border border-white/10 rounded-lg px-2.5 py-2 shadow-xl mt-[1vh] mb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg">👁️</span>
+                <span className="font-bold text-purple-400 text-sm">X-Ray Vision</span>
+                <span className="text-[10px] text-white/40 bg-white/10 px-1.5 py-0.5 rounded">PREVIEW</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    useItem(selectedItem.id).catch(err => showToast(err.message));
+                    setShowXrayConfirm(false);
+                    setSelectedItem(null);
+                  }}
+                  className="text-xs font-bold bg-purple-600 hover:bg-purple-500 px-2.5 py-1 rounded transition-colors"
+                >
+                  Activate
+                </button>
+                <button
+                  onClick={() => { setShowXrayConfirm(false); setSelectedItem(null); }}
+                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-base"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Player Boards Grid */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-3xl mx-auto">
+              {otherPlayers.filter(p => !p.eliminated && !p.solved).map((player) => (
+                <div key={player.id} className="bg-[#121213] border border-white/10 rounded-xl p-2 shadow-lg">
+                  <div className="text-sm font-medium mb-1.5 truncate text-center">
+                    {player.name}
+                  </div>
+                  <WordleGrid
+                    guesses={[]}
+                    results={[]}
+                    currentInput=""
+                    isCurrentPlayer={false}
+                    playerName=""
+                    solved={player.solved}
+                    score={player.roundScore}
+                    guessResults={player.guessResults || []}
+                    medium={true}
+                  />
+                </div>
+              ))}
+            </div>
+            {otherPlayers.filter(p => !p.eliminated && !p.solved).length === 0 && (
+              <div className="text-center text-white/40 mt-8">No players to view</div>
+            )}
           </div>
         </div>
       )}
@@ -891,50 +971,56 @@ export default function GameScreen({ showResults = false }) {
         </div>
       )}
 
-      {/* X-Ray Vision Overlay - See all players' boards */}
+      {/* X-Ray Vision Overlay - See all players' boards (ACTIVE - showing real letters) */}
       {xrayBoards && Object.keys(xrayBoards).length > 0 && (
-        <div className="fixed inset-0 bg-black/90 z-50 p-4 overflow-auto">
-          <div className="flex items-center justify-between mb-3 max-w-3xl mx-auto">
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg">👁️</span>
-              <span className="text-purple-300 text-sm font-medium">X-Ray</span>
-            </div>
-            <button
-              onClick={() => useGameStore.getState().setXrayBoards(null)}
-              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center text-lg"
-            >
-              ×
-            </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-            {Object.entries(xrayBoards).map(([id, board]) => (
-              <div key={id} className="glass rounded-lg p-2">
-                <div className="text-center text-sm font-bold mb-2 truncate">
-                  {board.name}
-                  {board.solved && <span className="text-wordle-green ml-1">✓</span>}
-                </div>
-                <WordleGrid
-                  guesses={board.guesses || []}
-                  results={board.results || []}
-                  currentInput=""
-                  isCurrentPlayer={false}
-                  playerName={board.name}
-                  solved={board.solved}
-                  score={0}
-                />
+        <div
+          className="fixed inset-0 bg-black/95 z-50 overflow-y-auto overscroll-contain p-2 pt-[env(safe-area-inset-top)]"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          <div className="min-h-full pb-8">
+            <div className="flex items-center justify-between mb-2 max-w-3xl mx-auto sticky top-0 bg-[#121213] rounded-lg px-2.5 py-2 z-10 border border-purple-500/30 shadow-lg mt-[1vh]">
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg">👁️</span>
+                <span className="text-purple-300 text-sm font-bold">X-Ray Vision</span>
+                <span className="text-[10px] text-purple-400 bg-purple-500/20 px-1.5 py-0.5 rounded">ACTIVE</span>
               </div>
-            ))}
+              <button
+                onClick={() => useGameStore.getState().setXrayBoards(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-base"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+              {Object.entries(xrayBoards).map(([id, board]) => (
+                <div key={id} className="bg-[#121213] border border-white/10 rounded-xl p-2 shadow-lg">
+                  <div className="text-center text-sm font-bold mb-2 truncate">
+                    {board.name}
+                    {board.solved && <span className="text-wordle-green ml-1">✓</span>}
+                  </div>
+                  <WordleGrid
+                    guesses={board.guesses || []}
+                    results={board.results || []}
+                    currentInput=""
+                    isCurrentPlayer={false}
+                    playerName={board.name}
+                    solved={board.solved}
+                    score={0}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* Second Chance Prompt Modal */}
       {showSecondChancePrompt && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#121213] border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center shadow-2xl">
             <div className="text-4xl mb-3">🔁</div>
             <h3 className="text-xl font-bold mb-2">Second Chance!</h3>
-            <p className="text-white/70 mb-4">
+            <p className="text-white/60 mb-5">
               You've used all 6 guesses. Use your Second Chance for one more try?
             </p>
             <div className="flex gap-3">
@@ -942,7 +1028,7 @@ export default function GameScreen({ showResults = false }) {
                 onClick={() => {
                   setShowSecondChancePrompt(false);
                 }}
-                className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 font-medium transition-colors"
+                className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 font-bold transition-colors"
               >
                 No Thanks
               </button>
@@ -950,7 +1036,7 @@ export default function GameScreen({ showResults = false }) {
                 onClick={() => {
                   activateSecondChance().catch(err => showToast(err.message));
                 }}
-                className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
+                className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
               >
                 Use It!
               </button>
@@ -961,19 +1047,19 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Mirror Shield Prompt Modal */}
       {mirrorShieldPrompt && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#121213] border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center shadow-2xl">
             <div className="text-4xl mb-3">🪞</div>
             <h3 className="text-xl font-bold mb-2 text-red-400">
               {mirrorShieldPrompt.isCounterReflect ? 'Reflected Back!' : 'Incoming Attack!'}
             </h3>
-            <p className="text-white/70 mb-4">
+            <p className="text-white/60 mb-4">
               <span className="font-bold text-white">{mirrorShieldPrompt.attacker}</span>{' '}
               {mirrorShieldPrompt.isCounterReflect ? 'reflected' : 'used'}{' '}
               <span className="font-bold text-red-400">{mirrorShieldPrompt.item?.emoji} {mirrorShieldPrompt.item?.name}</span>
               {mirrorShieldPrompt.isCounterReflect ? ' back at you!' : ' on you!'}
             </p>
-            <p className="text-purple-300 mb-4">
+            <p className="text-purple-300 mb-5">
               {mirrorShieldPrompt.isCounterReflect
                 ? 'Counter-reflect it back? (Final bounce)'
                 : 'Use Mirror Shield to reflect it back?'}
@@ -983,7 +1069,7 @@ export default function GameScreen({ showResults = false }) {
                 onClick={() => {
                   respondMirrorShield(false).catch(err => showToast(err.message));
                 }}
-                className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 font-medium transition-colors"
+                className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 font-bold transition-colors"
               >
                 Take Hit
               </button>
@@ -991,7 +1077,7 @@ export default function GameScreen({ showResults = false }) {
                 onClick={() => {
                   respondMirrorShield(true).catch(err => showToast(err.message));
                 }}
-                className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
+                className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
               >
                 {mirrorShieldPrompt.isCounterReflect ? '🪞 Counter!' : '🪞 Reflect!'}
               </button>
