@@ -264,15 +264,12 @@ export default function GameScreen({ showResults = false }) {
   const roundTimeSeconds = Math.floor(roundTimeRemaining / 1000);
   const isCriticalRound = roundTimeSeconds < 30;
   const maxGuesses = playerState?.hasSecondChance ? 7 : 6;
-  const canType = !showResults && !isEliminated && !playerState?.solved && playerState?.guesses?.length < maxGuesses;
+  // Guard against undefined playerState - ensure we can type if playerState exists and hasn't solved
+  const guessCount = playerState?.guesses?.length ?? 0;
+  const canType = !showResults && !isEliminated && playerState && !playerState.solved && guessCount < maxGuesses;
 
   return (
-    <div className="h-[100dvh] flex flex-col p-2 sm:p-3 overflow-hidden bg-gradient-to-br from-[#0a0a12] via-[#0d0d18] to-[#080810] relative">
-      {/* Ambient glow effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-wordle-green/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-purple-500/5 rounded-full blur-[100px]" />
-      </div>
+    <div className="h-[100dvh] flex flex-col p-2 sm:p-3 overflow-hidden bg-[#0a0a12] relative">
       {/* Compact Header */}
       <div className="flex items-center justify-between mb-2 relative z-20">
         <div className="flex items-center gap-2">
@@ -459,8 +456,6 @@ export default function GameScreen({ showResults = false }) {
         {!isEliminated && !showOtherPlayers && (
           <div className={`flex items-center justify-center ${hasFlip ? 'rotate-180' : ''}`}>
             <div className="relative">
-              {/* Subtle glow behind grid */}
-              <div className="absolute inset-0 bg-gradient-to-b from-wordle-green/10 to-transparent rounded-xl blur-xl scale-110 opacity-50" />
               <WordleGrid
                 guesses={playerState?.guesses || []}
                 results={hasInvisibleInk ? [] : (playerState?.results || [])}
@@ -519,10 +514,10 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className={`mt-auto pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4 px-2 sm:px-4 relative z-10 ${hasFlip ? 'rotate-180' : ''}`}>
-          <div className="flex flex-col gap-1.5 items-center max-w-lg mx-auto">
+        <div className={`mt-auto pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3 px-1 sm:px-4 relative z-10 ${hasFlip ? 'rotate-180' : ''}`}>
+          <div className="flex flex-col gap-1 sm:gap-1.5 items-center max-w-lg mx-auto">
             {displayKeyboard.map((row, rowIdx) => (
-              <div key={rowIdx} className="flex gap-1.5 justify-center">
+              <div key={rowIdx} className="flex gap-1 sm:gap-1.5 justify-center">
                 {row.map((key) => {
                   // In hardcore mode or amnesia effect, never show keyboard colors
                   const status = (isHardcore || hasAmnesia) ? null : keyboardStatus[key];
@@ -532,14 +527,14 @@ export default function GameScreen({ showResults = false }) {
                       key={key}
                       onClick={() => handleKeyPress(key)}
                       className={`
-                        ${isWide ? 'px-3 sm:px-4 text-xs sm:text-sm' : 'w-9 sm:w-11 text-sm sm:text-base'}
-                        h-12 sm:h-14 rounded-lg font-bold
-                        transition-all active:scale-95
+                        ${isWide ? 'px-2.5 sm:px-4 text-[10px] sm:text-sm' : 'w-8 sm:w-11 text-sm sm:text-base'}
+                        h-11 sm:h-14 rounded-md sm:rounded-lg font-bold
+                        active:opacity-70
                         ${hasBlindfold ? 'bg-white/10 text-transparent' :
-                          status === 'correct' ? 'bg-wordle-green text-white shadow-[0_0_12px_rgba(106,170,100,0.4)]' :
-                          status === 'present' ? 'bg-wordle-yellow text-white shadow-[0_0_12px_rgba(201,180,88,0.4)]' :
-                          status === 'absent' ? 'bg-white/5 text-white/30 border border-white/5' :
-                          'bg-white/10 text-white hover:bg-white/20 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-white/10'}
+                          status === 'correct' ? 'bg-wordle-green text-white' :
+                          status === 'present' ? 'bg-wordle-yellow text-white' :
+                          status === 'absent' ? 'bg-white/5 text-white/30' :
+                          'bg-white/15 text-white active:bg-white/25'}
                       `}
                     >
                       {hasBlindfold ? (isWide ? '' : '') : (key === 'DEL' ? '⌫' : key)}
@@ -560,8 +555,8 @@ export default function GameScreen({ showResults = false }) {
         const winnerStats = roundEndData?.playerStats?.[roundWinner?.id];
 
         return (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="glass rounded-2xl p-4 sm:p-6 max-w-2xl w-full animate-bounce-in my-4">
+          <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-[#121213] border border-white/10 rounded-2xl p-4 sm:p-6 max-w-2xl w-full animate-bounce-in my-4 shadow-2xl">
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-center mb-1">Round {gameState.currentRound} Complete!</h2>
               <p className="text-center text-white/60 mb-4">
                 The word was: <span className="text-wordle-green font-bold text-xl sm:text-2xl">{roundEndData?.word || playerState?.targetWord}</span>

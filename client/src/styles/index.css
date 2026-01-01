@@ -179,28 +179,31 @@ body::after {
   box-shadow: 0 0 20px rgba(201, 180, 88, 0.4);
 }
 
-/* Glass effect */
+/* Glass effect - no backdrop blur on mobile for performance */
 .glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Only use backdrop blur on larger screens where performance is better */
+@media (min-width: 768px) {
+  .glass {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.05);
+  }
 }
 
 /* Keyboard key styles */
 .key {
-  @apply flex items-center justify-center rounded-md font-bold uppercase cursor-pointer select-none transition-all;
+  @apply flex items-center justify-center rounded-md font-bold uppercase cursor-pointer select-none;
   background: #818384;
   min-width: 43px;
   height: 58px;
   padding: 0 12px;
 }
 
-.key:hover {
-  filter: brightness(1.1);
-}
-
 .key:active {
-  transform: scale(0.95);
+  opacity: 0.7;
 }
 
 .key.correct {

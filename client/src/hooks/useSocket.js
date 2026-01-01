@@ -128,6 +128,16 @@ export function useSocket() {
               if (response.playerState) {
                 setPlayerState(response.playerState);
               }
+              // Reset client-side state to match server state
+              // This ensures no stale keyboard colors or input from previous round
+              useGameStore.getState().resetKeyboardStatus();
+              useGameStore.getState().clearInput();
+              useGameStore.setState({
+                revealedLetters: {},
+                activeEffects: [],
+                letterSnipeResult: null,
+                xrayBoards: null
+              });
               showToast('Reconnected to game!', 2000);
             } else {
               // Room no longer exists or can't rejoin
@@ -272,6 +282,17 @@ export function useSocket() {
       socket.on('amnesiaClearKeyboard', () => {
         // Permanently clear keyboard colors
         useGameStore.getState().resetKeyboardStatus();
+      });
+
+      socket.on('identityTheftSwap', () => {
+        // Clear keyboard colors after identity theft swap
+        // since the old colors no longer apply to the new progress
+        useGameStore.getState().resetKeyboardStatus();
+        // Also clear current input since we have new board state
+        useGameStore.getState().clearInput();
+        // Clear revealed letters (they don't apply to new progress)
+        // but keep activeEffects - the server handles effect expiration
+        useGameStore.setState({ revealedLetters: {} });
       });
 
       socket.on('shieldBlocked', ({ targetPlayer, item }) => {
@@ -419,8 +440,25 @@ export function useSocket() {
             // Request state sync from server
             const session = getSession();
             if (session && session.roomCode) {
+              const currentRound = useGameStore.getState().gameState?.currentRound;
+
               socket.emit('syncState', { roomCode: session.roomCode }, (response) => {
                 if (response && response.success) {
+                  const newRound = response.gameState?.currentRound;
+
+                  // If round changed while user was away, reset client-side state
+                  if (currentRound !== undefined && newRound !== undefined && currentRound !== newRound) {
+                    console.log(`Round changed from ${currentRound} to ${newRound}, resetting client state`);
+                    useGameStore.getState().resetKeyboardStatus();
+                    useGameStore.getState().clearInput();
+                    useGameStore.setState({
+                      revealedLetters: {},
+                      activeEffects: [],
+                      letterSnipeResult: null,
+                      xrayBoards: null
+                    });
+                  }
+
                   useGameStore.getState().setGameState(response.gameState);
                   if (response.playerState) {
                     useGameStore.getState().setPlayerState(response.playerState);

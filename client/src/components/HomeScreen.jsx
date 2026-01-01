@@ -344,11 +344,11 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-between p-4 py-8">
       {/* Menu Button */}
       <button
         onClick={() => setShowInfo(true)}
-        className="absolute top-4 right-4 w-10 h-10 flex flex-col items-center justify-center gap-1.5 group"
+        className="fixed top-4 right-4 w-10 h-10 flex flex-col items-center justify-center gap-1.5 group z-10"
         title="Game Info"
       >
         <span className="w-5 h-0.5 bg-white/40 rounded-full transition-all group-hover:bg-white/70"></span>
@@ -356,74 +356,80 @@ export default function HomeScreen() {
         <span className="w-5 h-0.5 bg-white/40 rounded-full transition-all group-hover:bg-white/70"></span>
       </button>
 
-      <div className="text-center mb-12">
-        <h1 className="font-display text-6xl md:text-8xl font-bold mb-4 bg-gradient-to-r from-wordle-green via-wordle-yellow to-wordle-green bg-clip-text text-transparent">
-          WORDLE
-        </h1>
-        <h2 className="font-display text-3xl md:text-4xl font-semibold text-white/80">
-          ROYALE
-        </h2>
-        <p className="text-white/40 mt-4 font-mono">Multiplayer Word Battle</p>
-      </div>
+      {/* Spacer for top */}
+      <div className="flex-shrink-0" />
 
-      <div className="w-full max-w-sm space-y-4">
-        <button
-          onClick={() => setView('create')}
-          disabled={!connected}
-          className="btn-primary w-full text-lg disabled:opacity-50"
-        >
-          Create Game
-        </button>
+      {/* Main Content */}
+      <div className="flex flex-col items-center">
+        <div className="text-center mb-12">
+          <h1 className="font-display text-6xl md:text-8xl font-bold mb-4 bg-gradient-to-r from-wordle-green via-wordle-yellow to-wordle-green bg-clip-text text-transparent">
+            WORDLE
+          </h1>
+          <h2 className="font-display text-3xl md:text-4xl font-semibold text-white/80">
+            ROYALE
+          </h2>
+          <p className="text-white/40 mt-4 font-mono">Multiplayer Word Battle</p>
+        </div>
 
-        <button
-          onClick={() => setView('join')}
-          disabled={!connected}
-          className="btn-secondary w-full text-lg disabled:opacity-50"
-        >
-          Join Game
-        </button>
-      </div>
+        <div className="w-full max-w-sm space-y-4">
+          <button
+            onClick={() => setView('create')}
+            disabled={!connected}
+            className="btn-primary w-full text-lg disabled:opacity-50"
+          >
+            Create Game
+          </button>
 
-      <div className="mt-8 flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-wordle-green' : 'bg-red-500'}`} />
-        <span className="text-white/40 text-sm">
-          {connected ? 'Connected' : 'Connecting...'}
-        </span>
-      </div>
+          <button
+            onClick={() => setView('join')}
+            disabled={!connected}
+            className="btn-secondary w-full text-lg disabled:opacity-50"
+          >
+            Join Game
+          </button>
+        </div>
 
-      {/* Quick Info Cards */}
-      <div className="mt-10 flex flex-wrap justify-center gap-3 max-w-md">
-        <button
-          onClick={() => openInfo('howto')}
-          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-xl">📖</span>
-            <span className="text-white/80 font-medium">How to Play</span>
-          </div>
-        </button>
-        <button
-          onClick={() => openInfo('items')}
-          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🎯</span>
-            <span className="text-white/80 font-medium">Items & Powers</span>
-          </div>
-        </button>
-        <button
-          onClick={() => openInfo('modes')}
-          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-xl">⚔️</span>
-            <span className="text-white/80 font-medium">Game Modes</span>
-          </div>
-        </button>
+        <div className="mt-8 flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-wordle-green' : 'bg-red-500'}`} />
+          <span className="text-white/40 text-sm">
+            {connected ? 'Connected' : 'Connecting...'}
+          </span>
+        </div>
+
+        {/* Quick Info Cards */}
+        <div className="mt-10 flex flex-wrap justify-center gap-3 max-w-md">
+          <button
+            onClick={() => openInfo('howto')}
+            className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📖</span>
+              <span className="text-white/80 font-medium">How to Play</span>
+            </div>
+          </button>
+          <button
+            onClick={() => openInfo('items')}
+            className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎯</span>
+              <span className="text-white/80 font-medium">Items & Powers</span>
+            </div>
+          </button>
+          <button
+            onClick={() => openInfo('modes')}
+            className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⚔️</span>
+              <span className="text-white/80 font-medium">Game Modes</span>
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Dev Footer */}
-      <DevFooter />
+      <DevFooter compact />
 
       {/* Info Modal */}
       <InfoModal

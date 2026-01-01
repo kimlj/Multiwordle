@@ -6,21 +6,56 @@ export default function LobbyChat({ socket }) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
   const { gameState, playerId } = useGameStore();
   const players = gameState ? Object.values(gameState.players) : [];
 
+  // Handle iOS Safari keyboard - adjust chat position when keyboard opens
+  useEffect(() => {
+    if (!isOpen) {
+      setKeyboardOffset(0);
+      return;
+    }
+
+    const handleViewportResize = () => {
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const offset = windowHeight - viewportHeight;
+        setKeyboardOffset(offset > 0 ? offset : 0);
+      }
+    };
+
+    // Use visualViewport API for better iOS keyboard handling
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('scroll', handleViewportResize);
+      handleViewportResize();
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+        window.visualViewport.removeEventListener('scroll', handleViewportResize);
+      }
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, keyboardOffset]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+      // Small delay to ensure proper focus on iOS
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
     if (isOpen) setUnreadCount(0);
   }, [isOpen]);
@@ -51,9 +86,12 @@ export default function LobbyChat({ socket }) {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div
+      className="fixed right-4 z-40 transition-all duration-200"
+      style={{ bottom: `${16 + keyboardOffset}px` }}
+    >
       {isOpen && (
-        <div className="absolute bottom-14 right-0 w-64 bg-[#1a1a1b] border border-white/10 rounded-lg overflow-hidden animate-fade-in shadow-2xl">
+        <div className="absolute bottom-14 right-0 w-64 max-h-[50vh] bg-[#1a1a1b] border border-white/10 rounded-lg overflow-hidden animate-fade-in shadow-2xl flex flex-col">
           {/* Header */}
           <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
             <span className="text-xs text-white/50">{players.length} online</span>
@@ -65,7 +103,7 @@ export default function LobbyChat({ socket }) {
           </div>
 
           {/* Messages */}
-          <div className="h-80 overflow-y-auto p-2 space-y-1.5">
+          <div className="flex-1 min-h-[200px] max-h-[40vh] overflow-y-auto p-2 space-y-1.5">
             {messages.length === 0 ? (
               <div className="text-center text-white/20 text-xs py-12">No messages</div>
             ) : (
@@ -88,7 +126,7 @@ export default function LobbyChat({ socket }) {
           </div>
 
           {/* Input */}
-          <form onSubmit={handleSend} className="p-2 border-t border-white/10">
+          <form onSubmit={handleSend} className="shrink-0 p-2 border-t border-white/10">
             <div className="flex gap-1.5">
               <input
                 ref={inputRef}

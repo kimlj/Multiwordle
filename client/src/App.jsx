@@ -54,11 +54,30 @@ function App() {
     }
   };
 
+  // Show connection lost indicator if disconnected while in a game
+  const showConnectionLost = !connected && gameState && !isReconnecting;
+
   return (
     <div className="min-h-screen relative">
       {renderScreen()}
       {showCountdown && <CountdownOverlay />}
       {toast && <Toast message={toast} />}
+
+      {/* Connection Lost Overlay */}
+      {showConnectionLost && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4">
+          <div className="glass rounded-2xl p-6 text-center max-w-sm animate-bounce-in">
+            <div className="text-4xl mb-3 animate-pulse">📡</div>
+            <h2 className="font-display text-xl font-bold mb-2 text-red-400">Connection Lost</h2>
+            <p className="text-white/60 text-sm mb-4">Trying to reconnect...</p>
+            <div className="flex justify-center gap-1">
+              <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

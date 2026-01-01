@@ -42,6 +42,13 @@ export default function InfoModal({ isOpen, onClose, initialTab = 'howto' }) {
   const [isClosing, setIsClosing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
+  // Sync activeTab with initialTab when modal opens or initialTab changes
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);

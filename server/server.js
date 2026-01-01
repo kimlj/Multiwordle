@@ -50,7 +50,7 @@ const roomTimers = new Map();
 
 // Track disconnected players for reconnection (playerName:roomCode -> { playerId, disconnectTime, playerData })
 const disconnectedPlayers = new Map();
-const RECONNECT_WINDOW_MS = 300000; // 5 minutes to reconnect
+const RECONNECT_WINDOW_MS = 600000; // 10 minutes to reconnect
 
 // Track rooms scheduled for deletion (roomCode -> timeoutId)
 const roomDeletionTimers = new Map();
@@ -671,6 +671,35 @@ io.on('connection', (socket) => {
         playerData.ready = disconnectedPlayer.wasHost;
       }
 
+      // If room is in a different round than when player disconnected, reset their round data
+      // This handles the case where player disconnects during one round and reconnects during a new round
+      if (room.state === 'playing' || room.state === 'roundEnd' || room.state === 'countdown') {
+        const savedRound = disconnectedPlayer.playerData.lastDisconnectRound;
+        // Use !== undefined to properly check, since savedRound could be 0
+        const roundChanged = savedRound !== undefined && savedRound !== room.currentRound;
+        // Also reset if they have guesses but we're in a new round (fallback check)
+        const hasStaleData = playerData.guesses?.length > 0 && room.currentRound > 0 && savedRound !== room.currentRound;
+        // If savedRound is undefined but room is in a game state, reset to be safe
+        const missingRoundData = savedRound === undefined && room.currentRound > 0;
+
+        if (roundChanged || hasStaleData || missingRoundData) {
+          // Player is rejoining a different round - reset their round-specific data
+          // BUT keep totalScore - it persists across rounds!
+          console.log(`Resetting round data for ${playerName}: was round ${savedRound}, now round ${room.currentRound} (keeping totalScore: ${playerData.totalScore})`);
+          playerData.guesses = [];
+          playerData.results = [];
+          playerData.solved = false;
+          playerData.solvedAt = null;
+          playerData.solvedInGuesses = 0;
+          playerData.roundScore = 0;
+          playerData.activeEffects = [];
+          playerData.bonusTime = 0;
+          playerData.hasSecondChance = false;
+          playerData.hasMirrorShield = false;
+          // Note: totalScore is NOT reset - it persists across rounds
+        }
+      }
+
       // Add player back to room with their existing data
       room.players.set(socket.id, {
         ...playerData,
@@ -1285,6 +1314,16 @@ io.on('connection', (socket) => {
         }
       }
 
+      // For identity theft: both players need to clear their keyboard colors
+      // since they swapped progress and the old colors no longer apply
+      if (itemId === 'identity_theft' && targetId && !result.blocked) {
+        socket.emit('identityTheftSwap');
+        const targetSocket = io.sockets.sockets.get(targetId);
+        if (targetSocket) {
+          targetSocket.emit('identityTheftSwap');
+        }
+      }
+
       if (callback) callback({ success: true, ...result });
     } else {
       if (callback) callback(result);
@@ -1641,8 +1680,9 @@ io.on('connection', (socket) => {
     room.roundScores = [];
 
     for (const player of room.players.values()) {
-      // Host is always auto-ready
-      player.ready = player.id === room.hostId;
+      // Set ALL players as ready when game is reset via endGame
+      // This allows the host to immediately start a new game
+      player.ready = true;
       player.guesses = [];
       player.results = [];
       player.solved = false;
@@ -1654,6 +1694,9 @@ io.on('connection', (socket) => {
       player.eliminated = false;
       player.eliminatedRound = null;
       player.placement = null;
+      // Reset power-ups
+      player.inventory = [];
+      player.activeEffects = [];
     }
 
     io.to(roomCode).emit('gameReset', room.getPublicState());
@@ -1854,7 +1897,7 @@ io.on('connection', (socket) => {
           disconnectedPlayers.set(disconnectKey, {
             playerId: socket.id,
             disconnectTime: Date.now(),
-            playerData: { ...player },
+            playerData: { ...player, lastDisconnectRound: room.currentRound },
             wasHost: room.hostId === socket.id
           });
 

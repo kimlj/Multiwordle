@@ -1116,10 +1116,12 @@ export class GameRoom {
   }
 
   // Get all players' boards for X-Ray Vision
+  // Excludes solved players to prevent revealing the answer
   getAllPlayersBoards(excludePlayerId) {
     const boards = {};
     for (const [id, player] of this.players) {
-      if (id !== excludePlayerId && !player.eliminated) {
+      // Exclude self, eliminated players, AND solved players (to not reveal the word)
+      if (id !== excludePlayerId && !player.eliminated && !player.solved) {
         boards[id] = {
           name: player.name,
           guesses: player.guesses,
