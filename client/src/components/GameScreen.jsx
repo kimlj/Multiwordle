@@ -514,10 +514,10 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Tappable Keyboard */}
       {canType && (
-        <div className={`mt-auto pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3 px-1 sm:px-4 relative z-10 ${hasFlip ? 'rotate-180' : ''}`}>
-          <div className="flex flex-col gap-1 sm:gap-1.5 items-center max-w-lg mx-auto">
+        <div className={`mt-auto pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3 relative z-10 ${hasFlip ? 'rotate-180' : ''}`}>
+          <div className="flex flex-col gap-[3px] sm:gap-1.5 w-[95%] sm:w-full max-w-lg mx-auto">
             {displayKeyboard.map((row, rowIdx) => (
-              <div key={rowIdx} className="flex gap-1 sm:gap-1.5 justify-center">
+              <div key={rowIdx} className="flex gap-[3px] sm:gap-1.5 justify-center">
                 {row.map((key) => {
                   // In hardcore mode or amnesia effect, never show keyboard colors
                   const status = (isHardcore || hasAmnesia) ? null : keyboardStatus[key];
@@ -527,8 +527,8 @@ export default function GameScreen({ showResults = false }) {
                       key={key}
                       onClick={() => handleKeyPress(key)}
                       className={`
-                        ${isWide ? 'px-2.5 sm:px-4 text-[10px] sm:text-sm' : 'w-8 sm:w-11 text-sm sm:text-base'}
-                        h-11 sm:h-14 rounded-md sm:rounded-lg font-bold
+                        ${isWide ? 'flex-[1.5] text-[10px] sm:text-sm' : 'flex-1 text-sm sm:text-base'}
+                        h-12 sm:h-14 rounded-md sm:rounded-lg font-bold
                         active:opacity-70
                         ${hasBlindfold ? 'bg-white/10 text-transparent' :
                           status === 'correct' ? 'bg-wordle-green text-white' :
