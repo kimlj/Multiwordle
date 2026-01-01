@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 import WordleGrid from './WordleGrid';
+import InfoModal from './InfoModal';
 
 const KEYBOARD_ROWS = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
@@ -62,7 +63,7 @@ export default function GameScreen({ showResults = false }) {
   // Derive isHost from gameState to prevent sync issues
   const isHost = gameState?.hostId === playerId;
 
-  const { submitGuess, forceEndRound, endGame, useItem, letterSnipe, debugGiveAllItems, activateSecondChance, respondMirrorShield } = useSocket();
+  const { submitGuess, forceEndRound, endGame, useItem, letterSnipe, debugGiveAllItems, activateSecondChance, respondMirrorShield, leaveRoom } = useSocket();
   const [showHostMenu, setShowHostMenu] = useState(false);
   const [showOtherPlayers, setShowOtherPlayers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +73,8 @@ export default function GameScreen({ showResults = false }) {
   const [itemRoundExpanded, setItemRoundExpanded] = useState(false);
   const [showItemRoundPopup, setShowItemRoundPopup] = useState(false);
   const [lastItemRound, setLastItemRound] = useState(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // Show centered popup when Item Round starts, auto-hide after 3s or tap/keypress to dismiss
   useEffect(() => {
@@ -371,12 +374,36 @@ export default function GameScreen({ showResults = false }) {
           )}
         </div>
 
-        {/* Timer */}
-        <div className={`glass rounded-lg px-2 py-1 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20' : isCriticalRound ? 'border border-red-500' : ''}`}>
-          <div className="text-[10px] text-white/40">{isBonusTime ? '⏰ Bonus' : 'Time'}</div>
-          <div className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
-            {formatTime(roundTimeRemaining)}
+        <div className="flex items-center gap-2">
+          {/* Timer */}
+          <div className={`glass rounded-lg px-2 py-1 ${isBonusTime ? 'border border-purple-500 bg-purple-500/20' : isCriticalRound ? 'border border-red-500' : ''}`}>
+            <div className="text-[10px] text-white/40">{isBonusTime ? '⏰ Bonus' : 'Time'}</div>
+            <div className={`font-mono font-bold text-sm ${isBonusTime ? 'text-purple-400' : isCriticalRound ? 'timer-critical' : ''}`}>
+              {formatTime(roundTimeRemaining)}
+            </div>
           </div>
+
+          {/* Info Button */}
+          <button
+            onClick={() => setShowInfo(true)}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            title="Game Info"
+          >
+            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+
+          {/* Leave Button */}
+          <button
+            onClick={() => setShowLeaveConfirm(true)}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-red-500/30 flex items-center justify-center transition-colors"
+            title="Leave Game"
+          >
+            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -961,6 +988,39 @@ export default function GameScreen({ showResults = false }) {
                 className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
               >
                 {mirrorShieldPrompt.isCounterReflect ? '🪞 Counter!' : '🪞 Reflect!'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info Modal */}
+      <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
+
+      {/* Leave Confirmation Modal */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+            <div className="text-4xl mb-3">🚪</div>
+            <h3 className="text-xl font-bold mb-2">Leave Game?</h3>
+            <p className="text-white/70 mb-4">
+              Are you sure you want to leave? You'll lose your progress in this game.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 font-medium transition-colors"
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => {
+                  leaveRoom();
+                  setShowLeaveConfirm(false);
+                }}
+                className="flex-1 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors"
+              >
+                Leave
               </button>
             </div>
           </div>

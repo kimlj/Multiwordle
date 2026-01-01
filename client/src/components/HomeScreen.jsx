@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../lib/store';
+import InfoModal from './InfoModal';
 
 export default function HomeScreen() {
   const [view, setView] = useState('home'); // home, create, join
@@ -14,9 +15,16 @@ export default function HomeScreen() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
+  const [infoTab, setInfoTab] = useState('howto');
 
   const { createRoom, joinRoom, socket } = useSocket();
   const { connected } = useGameStore();
+
+  const openInfo = (tab = 'howto') => {
+    setInfoTab(tab);
+    setShowInfo(true);
+  };
 
   // Check URL for room code on load - try multiple methods
   useEffect(() => {
@@ -335,7 +343,18 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+      {/* Burger Menu Button */}
+      <button
+        onClick={() => setShowInfo(true)}
+        className="absolute top-4 right-4 w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+        title="Game Info"
+      >
+        <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
       <div className="text-center mb-12">
         <h1 className="font-display text-6xl md:text-8xl font-bold mb-4 bg-gradient-to-r from-wordle-green via-wordle-yellow to-wordle-green bg-clip-text text-transparent">
           WORDLE
@@ -345,7 +364,7 @@ export default function HomeScreen() {
         </h2>
         <p className="text-white/40 mt-4 font-mono">Multiplayer Word Battle</p>
       </div>
-      
+
       <div className="w-full max-w-sm space-y-4">
         <button
           onClick={() => setView('create')}
@@ -354,7 +373,7 @@ export default function HomeScreen() {
         >
           Create Game
         </button>
-        
+
         <button
           onClick={() => setView('join')}
           disabled={!connected}
@@ -363,97 +382,51 @@ export default function HomeScreen() {
           Join Game
         </button>
       </div>
-      
+
       <div className="mt-8 flex items-center gap-2">
         <div className={`w-2 h-2 rounded-full ${connected ? 'bg-wordle-green' : 'bg-red-500'}`} />
         <span className="text-white/40 text-sm">
           {connected ? 'Connected' : 'Connecting...'}
         </span>
       </div>
-      
-      <div className="mt-12 grid md:grid-cols-2 gap-4 max-w-3xl w-full">
-        {/* How to Play */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="font-bold text-lg mb-3 text-wordle-green">How to Play</h3>
-          <div className="text-white/60 text-sm space-y-2">
-            <p>🎯 Guess the 5-letter word in 6 tries</p>
-            <p>⚡ Race against other players and the clock</p>
-            <p>🏆 Score points based on speed and fewer guesses</p>
-            <p>🟩 Green = correct letter, correct spot</p>
-            <p>🟨 Yellow = correct letter, wrong spot</p>
-            <p>⬛ Gray = letter not in word</p>
-          </div>
-        </div>
 
-        {/* Scoring System */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="font-bold text-lg mb-3 text-wordle-yellow">Scoring System</h3>
-          <div className="text-sm space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-white/60">Base Score (solving)</span>
-              <span className="font-bold text-wordle-green">+1000</span>
-            </div>
-            <div className="border-t border-white/10 pt-2">
-              <div className="text-white/60 mb-1">Guess Bonus:</div>
-              <div className="text-xs text-white/40 space-y-1">
-                <div className="flex justify-between">
-                  <span>1 guess (genius!)</span>
-                  <span className="text-wordle-green">+900</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>2 guesses</span>
-                  <span className="text-wordle-green">+750</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>3 guesses</span>
-                  <span className="text-wordle-green">+600</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>4 guesses</span>
-                  <span className="text-wordle-green">+450</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>5 guesses</span>
-                  <span className="text-wordle-green">+300</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>6 guesses</span>
-                  <span className="text-wordle-green">+150</span>
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-white/10 pt-2">
-              <div className="text-white/60 mb-1">Time Bonus (up to 500 pts):</div>
-              <div className="text-xs text-white/40 space-y-1">
-                <p className="text-white/60">= seconds left × (500 ÷ round time)</p>
-                <p className="text-white/40">pts/sec = 500 ÷ total seconds</p>
-                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                  <div className="flex justify-between">
-                    <span>60s round</span>
-                    <span className="text-blue-400">8.3/sec</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>120s round</span>
-                    <span className="text-blue-400">4.2/sec</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>180s round</span>
-                    <span className="text-blue-400">2.8/sec</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>300s round</span>
-                    <span className="text-blue-400">1.7/sec</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="border-t border-white/10 pt-2 text-xs">
-              <div className="text-white/40">Example: 180s round, 3 guesses, 90s left</div>
-              <div className="text-white/60">= 1000 + 600 + (90 × 2.8) = <span className="text-wordle-yellow font-bold">1852 pts</span></div>
-            </div>
+      {/* Quick Info Cards */}
+      <div className="mt-10 flex flex-wrap justify-center gap-3 max-w-md">
+        <button
+          onClick={() => openInfo('howto')}
+          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📖</span>
+            <span className="text-white/80 font-medium">How to Play</span>
           </div>
-        </div>
+        </button>
+        <button
+          onClick={() => openInfo('items')}
+          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🎯</span>
+            <span className="text-white/80 font-medium">Items & Powers</span>
+          </div>
+        </button>
+        <button
+          onClick={() => openInfo('modes')}
+          className="glass rounded-xl px-4 py-3 hover:bg-white/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚔️</span>
+            <span className="text-white/80 font-medium">Game Modes</span>
+          </div>
+        </button>
       </div>
+
+      {/* Info Modal */}
+      <InfoModal
+        isOpen={showInfo}
+        onClose={() => setShowInfo(false)}
+        initialTab={infoTab}
+      />
     </div>
   );
 }
