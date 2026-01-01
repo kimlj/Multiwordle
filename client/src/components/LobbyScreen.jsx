@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 import InfoModal from './InfoModal';
+import DevFooter from './DevFooter';
 
 export default function LobbyScreen({ waitingForOthers = false }) {
   const { gameState, playerId, roomCode, showToast } = useGameStore();
@@ -150,7 +151,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
         )}
 
         {/* Top Nav */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <button
             onClick={() => leaveRoom()}
             className="text-white/60 hover:text-white flex items-center gap-2 transition-colors"
@@ -653,6 +654,11 @@ export default function LobbyScreen({ waitingForOthers = false }) {
           </div>
         )}
 
+      </div>
+
+      {/* Dev Footer */}
+      <div className="mt-4 flex justify-center">
+        <DevFooter compact />
       </div>
 
       {/* Info Modal */}

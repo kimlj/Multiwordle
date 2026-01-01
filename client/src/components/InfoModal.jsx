@@ -46,11 +46,19 @@ export default function InfoModal({ isOpen, onClose, initialTab = 'howto' }) {
     if (isOpen) {
       setIsVisible(true);
       setIsClosing(false);
+      // Lock body scroll on iOS Safari
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
     }
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
   }, [isOpen]);
 
   const handleClose = () => {
     setIsClosing(true);
+    document.body.classList.remove('modal-open');
     setTimeout(() => {
       setIsVisible(false);
       onClose();
@@ -68,9 +76,10 @@ export default function InfoModal({ isOpen, onClose, initialTab = 'howto' }) {
     >
       <div
         className={`glass rounded-xl w-full max-w-lg h-[85vh] flex flex-col transition-all duration-200 ${
-          isClosing ? 'opacity-0 scale-95 translate-y-4' : 'animate-slide-up'
+          isClosing ? 'opacity-0 translate-y-4' : 'animate-slide-up'
         }`}
         onClick={e => e.stopPropagation()}
+        style={{ touchAction: 'pan-y' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-white/10">

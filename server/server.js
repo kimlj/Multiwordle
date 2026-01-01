@@ -667,7 +667,8 @@ io.on('connection', (socket) => {
         playerData.solvedAt = null;
         playerData.solvedInGuesses = 0;
         playerData.returnedToLobby = false;
-        playerData.ready = false;
+        // Host is always auto-ready
+        playerData.ready = disconnectedPlayer.wasHost;
       }
 
       // Add player back to room with their existing data
@@ -720,15 +721,22 @@ io.on('connection', (socket) => {
         oldSocket.disconnect(true);
       }
 
+      // Check if this was the host
+      const wasHost = room.hostId === oldSocketId;
+
       // Restore host status if they were the host
-      if (room.hostId === oldSocketId) {
+      if (wasHost) {
         room.hostId = socket.id;
       }
+
+      // In lobby state, host should always be ready
+      const playerReady = room.state === 'lobby' && wasHost ? true : existingPlayer.ready;
 
       // Add player back with new socket id
       room.players.set(socket.id, {
         ...existingPlayer,
-        id: socket.id
+        id: socket.id,
+        ready: playerReady
       });
 
       playerRooms.set(socket.id, roomCode);

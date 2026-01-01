@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../lib/store';
 import InfoModal from './InfoModal';
+import DevFooter from './DevFooter';
 
 export default function HomeScreen() {
   const [view, setView] = useState('home'); // home, create, join
@@ -420,6 +421,9 @@ export default function HomeScreen() {
           </div>
         </button>
       </div>
+
+      {/* Dev Footer */}
+      <DevFooter />
 
       {/* Info Modal */}
       <InfoModal

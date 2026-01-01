@@ -123,6 +123,8 @@ export function useSocket() {
               setPlayerId(response.playerId);
               setRoomCode(response.roomCode);
               setGameState(response.gameState);
+              // Update isHost based on server's hostId
+              setIsHost(response.gameState?.hostId === response.playerId);
               if (response.playerState) {
                 setPlayerState(response.playerState);
               }
