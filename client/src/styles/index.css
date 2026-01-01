@@ -425,3 +425,17 @@ body.modal-open {
     opacity: 1;
   }
 }
+
+/* Subtle bounce for chat icon */
+.animate-subtle-bounce {
+  animation: subtleBounce 2s ease-in-out infinite;
+}
+
+@keyframes subtleBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}

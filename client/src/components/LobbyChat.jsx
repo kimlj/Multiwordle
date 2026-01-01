@@ -53,7 +53,7 @@ export default function LobbyChat({ socket }) {
   return (
     <div className="fixed bottom-4 right-4 z-40">
       {isOpen && (
-        <div className="absolute bottom-12 right-0 w-64 bg-[#1a1a1b] border border-white/10 rounded-lg overflow-hidden animate-fade-in shadow-2xl">
+        <div className="absolute bottom-14 right-0 w-64 bg-[#1a1a1b] border border-white/10 rounded-lg overflow-hidden animate-fade-in shadow-2xl">
           {/* Header */}
           <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
             <span className="text-xs text-white/50">{players.length} online</span>
@@ -65,7 +65,7 @@ export default function LobbyChat({ socket }) {
           </div>
 
           {/* Messages */}
-          <div className="h-72 overflow-y-auto p-2 space-y-1.5">
+          <div className="h-80 overflow-y-auto p-2 space-y-1.5">
             {messages.length === 0 ? (
               <div className="text-center text-white/20 text-xs py-12">No messages</div>
             ) : (
@@ -116,16 +116,21 @@ export default function LobbyChat({ socket }) {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-          isOpen ? 'bg-white/10' : 'bg-white/5 hover:bg-white/10 border border-white/10'
+        className={`w-[3rem] h-[3rem] flex items-center justify-center transition-all relative group ${
+          !isOpen ? 'animate-subtle-bounce' : ''
         }`}
       >
-        <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-[2rem] h-[2rem] text-white/60 drop-shadow-[0_0_6px_rgba(255,255,255,0.3)] transition-all duration-300 group-hover:text-white/90 group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.5)]"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
 
         {!isOpen && unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
