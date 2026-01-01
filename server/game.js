@@ -30,10 +30,10 @@ export const RARITY_POOLS = {
 
 // Item Round Challenge Types
 export const CHALLENGES = {
-  SPEED_SOLVE: { id: 'speed_solve', name: 'Speed Solve', description: 'Solve in under 25 seconds', emoji: '⚡' },
-  RARE_LETTERS: { id: 'rare_letters', name: 'Rare Letters', description: 'Use Z, X, Q, or J in a guess', emoji: '💎' },
-  FIRST_BLOOD: { id: 'first_blood', name: 'First Blood', description: 'First player to solve the word', emoji: '🩸' },
-  EFFICIENCY: { id: 'efficiency', name: 'Efficiency', description: 'Solve in 3 guesses or less', emoji: '🎯' }
+  SPEED_SOLVE: { id: 'speed_solve', name: 'Speed Solve', description: 'Solve in under 30 seconds', emoji: '⚡', rewardTier: 'legendary' },
+  RARE_LETTERS: { id: 'rare_letters', name: 'Rare Letters', description: 'Use Z, X, Q, or J in a guess', emoji: '💎', rewardTier: 'common_rare' },
+  FIRST_BLOOD: { id: 'first_blood', name: 'First Blood', description: 'First player to solve the word', emoji: '🩸', rewardTier: 'legendary' },
+  EFFICIENCY: { id: 'efficiency', name: 'Efficiency', description: 'Solve in 3 guesses or less', emoji: '🎯', rewardTier: 'legendary' }
 };
 
 // Rare letters for the challenge
@@ -382,10 +382,18 @@ export class GameRoom {
       const challenges = Object.values(CHALLENGES);
       this.currentChallenge = challenges[Math.floor(Math.random() * challenges.length)];
 
-      // Pre-generate a reward item (use a middle position for fairness)
-      const totalPlayers = this.getActivePlayers().length;
-      const middlePosition = Math.ceil(totalPlayers / 2);
-      this.itemRoundReward = getRandomDrop(middlePosition, totalPlayers);
+      // Select reward based on challenge's reward tier
+      if (this.currentChallenge.rewardTier === 'legendary') {
+        // Legendary challenges: random legendary item
+        const legendaryItems = RARITY_POOLS.legendary;
+        const randomId = legendaryItems[Math.floor(Math.random() * legendaryItems.length)];
+        this.itemRoundReward = ITEMS[randomId.toUpperCase()];
+      } else {
+        // common_rare tier: random from common or rare pools
+        const commonRareItems = [...RARITY_POOLS.common, ...RARITY_POOLS.rare];
+        const randomId = commonRareItems[Math.floor(Math.random() * commonRareItems.length)];
+        this.itemRoundReward = ITEMS[randomId.toUpperCase()];
+      }
     } else {
       this.currentChallenge = null;
       this.itemRoundReward = null;
@@ -1160,7 +1168,7 @@ export class GameRoom {
     if (!player || !player.solved || !player.solvedAt) return false;
 
     const solveTimeSeconds = (player.solvedAt - this.roundStartTime) / 1000;
-    if (solveTimeSeconds < 25) {
+    if (solveTimeSeconds < 30) {
       this.challengeCompletedBy.add(playerId);
       return true;
     }
