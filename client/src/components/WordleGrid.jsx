@@ -58,9 +58,13 @@ export default function WordleGrid({
         }
       }
 
-      // Cell size based on large prop
+      // Cell size based on large prop and number of rows
+      // Make cells smaller when 7 rows to keep grid compact
+      const isCompact = maxGuesses > 6;
       const cellSize = large
-        ? 'w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] text-3xl sm:text-4xl'
+        ? (isCompact
+            ? 'w-[52px] h-[52px] sm:w-[58px] sm:h-[58px] text-2xl sm:text-3xl'
+            : 'w-[60px] h-[60px] sm:w-[68px] sm:h-[68px] text-3xl sm:text-4xl')
         : 'w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm';
 
       cells.push(
@@ -86,12 +90,16 @@ export default function WordleGrid({
       );
     }
 
+    // Reduce gaps when compact (7 rows)
+    const isCompact = maxGuesses > 6;
     rows.push(
-      <div key={i} className={`flex ${large ? 'gap-1.5' : 'gap-0.5'} justify-center`}>
+      <div key={i} className={`flex ${large ? (isCompact ? 'gap-1' : 'gap-1.5') : 'gap-0.5'} justify-center`}>
         {cells}
       </div>
     );
   }
+
+  const isCompact = maxGuesses > 6;
 
   return (
     <div className="flex flex-col items-center">
@@ -104,7 +112,7 @@ export default function WordleGrid({
       </div>
 
       {/* Grid - no container */}
-      <div className={`flex flex-col ${large ? 'gap-1.5 p-1' : 'gap-0.5 p-0.5'} ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded' : ''}`}>
+      <div className={`flex flex-col ${large ? (isCompact ? 'gap-1 p-0.5' : 'gap-1.5 p-1') : 'gap-0.5 p-0.5'} ${isCurrentPlayer ? 'ring-1 ring-wordle-green/50 rounded' : ''}`}>
         {rows}
       </div>
     </div>

@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getSabotageDuration } from './game.js';
+import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getRandomRoundDrops, getSabotageDuration } from './game.js';
 import { isValidWord, getRandomWord } from './words.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +39,10 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 
 const gameManager = new GameManager();
 const playerRooms = new Map(); // playerId -> roomCode
+
+// Store pending sabotages awaiting mirror shield response
+// Map: targetPlayerId -> { attackerId, itemId, item, roomCode, timestamp }
+const pendingSabotages = new Map();
 
 // Timer management
 const roomTimers = new Map();
@@ -257,7 +261,7 @@ function endRound(roomCode) {
   // ============================================
   // END-ROUND ITEM DROPS
   // ============================================
-  const drops = {}; // playerId -> { item, trigger }
+  const drops = {}; // playerId -> [{ item, trigger }]
 
   if (room.settings.powerUpsEnabled) {
     const activePlayers = room.getActivePlayers();
@@ -270,6 +274,21 @@ function endRound(roomCode) {
     // Determine bottom rank threshold (bottom half, or bottom 2 for small games)
     const bottomThreshold = Math.max(2, Math.ceil(totalPlayers / 2));
 
+    // ===========================================
+    // RANDOM DROPS - Give random items each round
+    // ===========================================
+    const randomDrops = getRandomRoundDrops(activePlayers, totalPlayers);
+    for (const { playerId, item } of randomDrops) {
+      if (item) {
+        room.addItemToInventory(playerId, item);
+        if (!drops[playerId]) drops[playerId] = [];
+        drops[playerId].push({ item, trigger: 'random' });
+      }
+    }
+
+    // ===========================================
+    // SKILL-BASED DROPS
+    // ===========================================
     for (const player of activePlayers) {
       const position = room.getPlayerPosition(player.id);
       const prevPosition = player.lastRoundPosition || position;
@@ -341,23 +360,28 @@ function endRound(roomCode) {
         }
       }
 
-      // Give the drop
+      // Give the skill-based drop
       if (earnedDrop) {
         const item = getRandomDrop(position, totalPlayers);
         if (item) {
           room.addItemToInventory(player.id, item);
-          drops[player.id] = { item, trigger };
+          if (!drops[player.id]) drops[player.id] = [];
+          drops[player.id].push({ item, trigger });
         }
       }
     }
   }
 
   // Send item notifications to players who received end-round drops
-  for (const [playerId, dropInfo] of Object.entries(drops)) {
+  for (const [playerId, dropInfoArray] of Object.entries(drops)) {
     const playerSocket = io.sockets.sockets.get(playerId);
-    if (playerSocket && dropInfo.item) {
-      playerSocket.emit('itemReceived', { item: dropInfo.item, trigger: dropInfo.trigger });
-      const player = room.players.get(playerId);
+    const player = room.players.get(playerId);
+    if (playerSocket && dropInfoArray.length > 0) {
+      // Send individual item notifications
+      for (const dropInfo of dropInfoArray) {
+        playerSocket.emit('itemReceived', { item: dropInfo.item, trigger: dropInfo.trigger });
+      }
+      // Send updated inventory
       if (player) {
         playerSocket.emit('inventoryUpdate', { inventory: player.inventory });
       }
@@ -366,7 +390,7 @@ function endRound(roomCode) {
       io.to(roomCode).emit('itemEarned', {
         playerId,
         playerName,
-        items: [{ item: dropInfo.item, trigger: dropInfo.trigger, challenge: null }]
+        items: dropInfoArray.map(d => ({ item: d.item, trigger: d.trigger, challenge: null }))
       });
     }
   }
@@ -471,12 +495,18 @@ io.on('connection', (socket) => {
       return;
     }
 
+    const player = room.players.get(socket.id);
     if (callback) {
       callback({
         success: true,
         gameState: room.getPublicState(),
         playerState: room.getPlayerState(socket.id)
       });
+    }
+
+    // Also send inventory update to restore items on client
+    if (player && player.inventory && player.inventory.length > 0) {
+      socket.emit('inventoryUpdate', { inventory: player.inventory });
     }
   });
 
@@ -656,6 +686,7 @@ io.on('connection', (socket) => {
         gameState: room.getPublicState()
       });
 
+      const restoredPlayer = room.players.get(socket.id);
       callback({
         success: true,
         roomCode,
@@ -663,6 +694,11 @@ io.on('connection', (socket) => {
         gameState: room.getPublicState(),
         playerState: room.getPlayerState(socket.id)
       });
+
+      // Send inventory update to restore items on client
+      if (restoredPlayer && restoredPlayer.inventory && restoredPlayer.inventory.length > 0) {
+        socket.emit('inventoryUpdate', { inventory: restoredPlayer.inventory });
+      }
 
       console.log(`${playerName} reconnected to room ${roomCode}`);
       return;
@@ -704,6 +740,7 @@ io.on('connection', (socket) => {
         gameState: room.getPublicState()
       });
 
+      const restoredPlayer = room.players.get(socket.id);
       callback({
         success: true,
         roomCode,
@@ -711,6 +748,11 @@ io.on('connection', (socket) => {
         gameState: room.getPublicState(),
         playerState: room.getPlayerState(socket.id)
       });
+
+      // Send inventory update to restore items on client
+      if (restoredPlayer && restoredPlayer.inventory && restoredPlayer.inventory.length > 0) {
+        socket.emit('inventoryUpdate', { inventory: restoredPlayer.inventory });
+      }
 
       console.log(`${playerName} took over stale socket in room ${roomCode}`);
       return;
@@ -842,7 +884,12 @@ io.on('connection', (socket) => {
         room.roundScores = [];
 
         for (const p of room.players.values()) {
-          p.ready = p.id === room.hostId;
+          // Preserve ready state - players who clicked ready while waiting should stay ready
+          // Host is always auto-ready
+          if (p.id === room.hostId) {
+            p.ready = true;
+          }
+          // Keep existing ready state for other players (don't reset to false)
           p.guesses = [];
           p.results = [];
           p.solved = false;
@@ -945,8 +992,8 @@ io.on('connection', (socket) => {
           let challengeCompleted = false;
           const challengeType = room.currentChallenge.id;
 
-          // First Blood - first to submit any guess
-          if (challengeType === 'first_blood') {
+          // First Blood - first to SOLVE the word
+          if (challengeType === 'first_blood' && result.solved) {
             challengeCompleted = room.checkFirstBlood(socket.id);
           }
           // Rare Letters - guess contains Z, X, Q, or J
@@ -994,6 +1041,25 @@ io.on('connection', (socket) => {
               challenge: e.challenge || null
             }))
           });
+        }
+      }
+
+      // Check if player should be prompted to use Second Chance
+      // Condition: 6 guesses used, not solved, has Second Chance in inventory
+      if (result.guessNumber === 6 && !result.solved) {
+        const player = room.players.get(socket.id);
+        console.log(`Second Chance check: guesses=${result.guessNumber}, solved=${result.solved}, hasSecondChance=${player?.hasSecondChance}`);
+        console.log(`Inventory:`, player?.inventory?.map(i => i.id));
+        if (player && !player.hasSecondChance) {
+          // Check if they have Second Chance in inventory
+          const hasSecondChanceItem = player.inventory.some(i => i.id === 'second_chance');
+          console.log(`Has second_chance in inventory: ${hasSecondChanceItem}`);
+          if (hasSecondChanceItem) {
+            console.log('Sending secondChancePrompt');
+            socket.emit('secondChancePrompt', {
+              message: 'You have a Second Chance! Use it for one more guess?'
+            });
+          }
         }
       }
 
@@ -1115,17 +1181,50 @@ io.on('connection', (socket) => {
             attacker: attackerName,
             item: result.item
           });
-          // Update target's inventory (shield was consumed)
-          const targetPlayer = room.players.get(targetId);
-          if (targetPlayer) {
-            targetSocket.emit('inventoryUpdate', { inventory: targetPlayer.inventory });
-          }
         }
+      }
+
+      // If target has Mirror Shield in inventory, send them a prompt
+      if (result.pendingMirrorShield) {
+        // Store the pending sabotage
+        pendingSabotages.set(targetId, {
+          attackerId: socket.id,
+          itemId,
+          item: result.item,
+          roomCode,
+          timestamp: Date.now()
+        });
+
+        // Send prompt to target
+        const targetSocket = io.sockets.sockets.get(targetId);
+        if (targetSocket) {
+          const attackerName = room.players.get(socket.id)?.name || 'Someone';
+          targetSocket.emit('mirrorShieldPrompt', {
+            attacker: attackerName,
+            item: result.item
+          });
+        }
+
+        // Don't continue with normal sabotage flow - wait for response
+        if (callback) callback({ success: true, awaitingMirrorShield: true });
+        return;
       }
 
       // If letter revealed, send to user
       if (result.revealedLetter) {
         socket.emit('letterRevealed', result.revealedLetter);
+      }
+
+      // If Shield activated, send duration notification
+      if (result.item?.id === 'shield' && result.activated) {
+        socket.emit('activeEffect', {
+          effect: 'shield',
+          duration: result.duration,
+          data: null
+        });
+        socket.emit('shieldActivated', {
+          duration: result.duration
+        });
       }
 
       // If X-Ray Vision used, send boards and start effect
@@ -1158,6 +1257,170 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Activate Second Chance (when prompted after 6 guesses)
+  socket.on('activateSecondChance', (callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'playing') {
+      if (callback) callback({ success: false, error: 'Game not in progress' });
+      return;
+    }
+
+    const player = room.players.get(socket.id);
+    if (!player) {
+      if (callback) callback({ success: false, error: 'Player not found' });
+      return;
+    }
+
+    // Check if player has exactly 6 guesses and hasn't solved
+    if (player.guesses.length !== 6 || player.solved) {
+      if (callback) callback({ success: false, error: 'Cannot use Second Chance now' });
+      return;
+    }
+
+    // Check if player has Second Chance in inventory
+    const itemIndex = player.inventory.findIndex(i => i.id === 'second_chance');
+    if (itemIndex === -1) {
+      if (callback) callback({ success: false, error: 'No Second Chance in inventory' });
+      return;
+    }
+
+    // Already activated
+    if (player.hasSecondChance) {
+      if (callback) callback({ success: false, error: 'Second Chance already active' });
+      return;
+    }
+
+    // Activate Second Chance
+    player.inventory.splice(itemIndex, 1);
+    player.hasSecondChance = true;
+
+    // Send inventory update
+    socket.emit('inventoryUpdate', { inventory: player.inventory });
+
+    // Send updated player state (so client knows hasSecondChance is true)
+    socket.emit('playerState', room.getPlayerState(socket.id));
+
+    // Notify player
+    socket.emit('secondChanceActivated', {
+      message: 'Second Chance activated! You have one more guess.'
+    });
+
+    // Broadcast to all players
+    io.to(roomCode).emit('itemUsed', {
+      fromPlayer: socket.id,
+      item: { id: 'second_chance', name: 'Second Chance', emoji: '🔁', type: 'powerup' },
+      targetPlayer: null
+    });
+
+    io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+
+    if (callback) callback({ success: true });
+  });
+
+  // Respond to Mirror Shield prompt (use or decline)
+  socket.on('respondMirrorShield', ({ useMirror }, callback) => {
+    const pending = pendingSabotages.get(socket.id);
+    if (!pending) {
+      if (callback) callback({ success: false, error: 'No pending sabotage' });
+      return;
+    }
+
+    const roomCode = pending.roomCode;
+    const room = gameManager.getRoom(roomCode);
+    if (!room || room.state !== 'playing') {
+      pendingSabotages.delete(socket.id);
+      if (callback) callback({ success: false, error: 'Game not in progress' });
+      return;
+    }
+
+    const target = room.players.get(socket.id);
+    const attacker = room.players.get(pending.attackerId);
+    if (!target || !attacker) {
+      pendingSabotages.delete(socket.id);
+      if (callback) callback({ success: false, error: 'Players not found' });
+      return;
+    }
+
+    pendingSabotages.delete(socket.id);
+
+    if (useMirror) {
+      // Use mirror shield - reflect sabotage back
+      const result = room.useMirrorShield(socket.id, pending.itemId, pending.attackerId);
+
+      if (result.success) {
+        // Send inventory update to target (mirror shield consumed)
+        socket.emit('inventoryUpdate', { inventory: target.inventory });
+
+        // Identity Theft is blocked, not reflected (swap would be same either way)
+        const isBlocked = result.blocked;
+
+        // Notify target their mirror shield worked
+        socket.emit('mirrorProtected', {
+          attacker: attacker.name,
+          item: pending.item,
+          blocked: isBlocked
+        });
+
+        // Notify attacker their attack was reflected/blocked
+        const attackerSocket = io.sockets.sockets.get(pending.attackerId);
+        if (attackerSocket) {
+          attackerSocket.emit('mirrorReflected', {
+            reflectedBy: target.name,
+            item: pending.item,
+            blocked: isBlocked
+          });
+
+          // Apply effect to attacker (only if not just blocked)
+          if (!isBlocked && result.effect && result.effect.duration) {
+            attackerSocket.emit('activeEffect', {
+              effect: pending.itemId,
+              duration: result.effect.duration,
+              data: null
+            });
+            attackerSocket.emit('sabotaged', {
+              item: pending.item,
+              fromPlayer: target.name
+            });
+          }
+        }
+
+        io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+        if (callback) callback({ success: true, reflected: true, blocked: isBlocked });
+      } else {
+        if (callback) callback(result);
+      }
+    } else {
+      // Decline mirror shield - apply sabotage to target
+      const effect = room.applySabotage(socket.id, pending.itemId, pending.attackerId);
+
+      if (effect) {
+        // Notify target they've been sabotaged
+        socket.emit('sabotaged', {
+          item: pending.item,
+          fromPlayer: attacker.name
+        });
+
+        // Apply active effect
+        if (effect.duration) {
+          socket.emit('activeEffect', {
+            effect: pending.itemId,
+            duration: effect.duration,
+            data: null
+          });
+        }
+      }
+
+      io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
+      if (callback) callback({ success: true, reflected: false });
+    }
+  });
+
   // Letter Snipe - check if a letter is in the word
   socket.on('letterSnipe', ({ letter }, callback) => {
     const roomCode = playerRooms.get(socket.id);
@@ -1185,14 +1448,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (player.usedItemThisRound) {
-      if (callback) callback({ success: false, error: 'Already used an item this round' });
-      return;
-    }
-
-    // Use the item
+    // Use the item (no limit on items per round)
     player.inventory.splice(itemIndex, 1);
-    player.usedItemThisRound = true;
 
     const result = room.letterSnipe(socket.id, letter);
 
@@ -1235,23 +1492,24 @@ io.on('connection', (socket) => {
     const allItems = [
       { id: 'letter_snipe', type: 'powerup', name: 'Letter Snipe', emoji: '🎯' },
       { id: 'shield', type: 'powerup', name: 'Shield', emoji: '🛡️' },
-      { id: 'letter_reveal', type: 'powerup', name: 'Letter Reveal', emoji: '✨' },
-      { id: 'time_warp', type: 'powerup', name: 'Time Warp', emoji: '⏰' },
+      { id: 'mirror_shield', type: 'powerup', name: 'Mirror Shield', emoji: '🪞' },
+      { id: 'second_chance', type: 'powerup', name: 'Second Chance', emoji: '🔁' },
+      { id: 'xray_vision', type: 'powerup', name: 'X-Ray Vision', emoji: '👁️' },
       { id: 'blindfold', type: 'sabotage', name: 'Blindfold', emoji: '🙈' },
       { id: 'flip_it', type: 'sabotage', name: 'Flip It', emoji: '🙃' },
       { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', emoji: '🔀' },
       { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', emoji: '👻' },
-      { id: 'amnesia', type: 'sabotage', name: 'Amnesia', emoji: '🧠' },
       { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', emoji: '🔄' }
     ];
 
     // Give all items to all players (replace inventory)
     for (const [playerId, player] of room.players) {
       player.inventory = [...allItems];
-      player.usedItemThisRound = false; // Allow using items
+      console.log(`Gave items to ${player.name}:`, player.inventory.map(i => i.id));
       const playerSocket = io.sockets.sockets.get(playerId);
       if (playerSocket) {
         playerSocket.emit('inventoryUpdate', { inventory: player.inventory });
+        console.log(`Sent inventoryUpdate to ${player.name}`);
       }
     }
 
@@ -1380,8 +1638,12 @@ io.on('connection', (socket) => {
       room.roundScores = [];
 
       for (const p of room.players.values()) {
+        // Preserve ready state - players who clicked ready while waiting should stay ready
         // Host is always auto-ready
-        p.ready = p.id === room.hostId;
+        if (p.id === room.hostId) {
+          p.ready = true;
+        }
+        // Keep existing ready state for other players (don't reset to false)
         p.guesses = [];
         p.results = [];
         p.solved = false;
@@ -1396,9 +1658,7 @@ io.on('connection', (socket) => {
         p.placement = null;
         // Reset power-ups state for new game
         p.inventory = [];
-        p.hasShield = false;
         p.activeEffects = [];
-        p.usedItemThisRound = false;
       }
 
       io.to(roomCode).emit('gameReset', room.getPublicState());

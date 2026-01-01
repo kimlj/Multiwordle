@@ -13,16 +13,18 @@ const LETTER_PICKER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 // Item definitions for UI
 const ITEM_INFO = {
+  // Common
   letter_snipe: { name: 'Letter Snipe', emoji: '🎯', type: 'powerup', needsLetter: true, desc: 'Check if a letter is in the word' },
-  shield: { name: 'Shield', emoji: '🛡️', type: 'powerup', passive: true, desc: 'Auto-blocks next sabotage' },
-  letter_reveal: { name: 'Letter Reveal', emoji: '✨', type: 'powerup', desc: 'Shows one correct letter position' },
-  time_warp: { name: 'Time Warp', emoji: '⏰', type: 'powerup', desc: '+30 seconds to your timer' },
-  xray_vision: { name: 'X-Ray Vision', emoji: '👁️', type: 'powerup', legendary: true, desc: 'See all players\' boards for 10s' },
-  blindfold: { name: 'Blindfold', emoji: '🙈', type: 'sabotage', needsTarget: true, desc: 'Blanks their keyboard letters' },
   flip_it: { name: 'Flip It', emoji: '🙃', type: 'sabotage', needsTarget: true, desc: 'Flips screen upside down' },
   keyboard_shuffle: { name: 'Keyboard Shuffle', emoji: '🔀', type: 'sabotage', needsTarget: true, desc: 'Randomizes keyboard layout' },
-  invisible_ink: { name: 'Invisible Ink', emoji: '👻', type: 'sabotage', needsTarget: true, desc: 'Hides their guesses & colors' },
-  amnesia: { name: 'Amnesia', emoji: '🧠', type: 'sabotage', needsTarget: true, desc: 'Wipes keyboard colors permanently' },
+  // Rare
+  blindfold: { name: 'Blindfold', emoji: '🙈', type: 'sabotage', needsTarget: true, rare: true, desc: 'Blanks their keyboard letters' },
+  invisible_ink: { name: 'Invisible Ink', emoji: '👻', type: 'sabotage', needsTarget: true, rare: true, desc: 'Hides their guesses & colors' },
+  mirror_shield: { name: 'Mirror Shield', emoji: '🪞', type: 'powerup', rare: true, passive: true, desc: 'Auto-reflects next sabotage' },
+  second_chance: { name: 'Second Chance', emoji: '🔁', type: 'powerup', rare: true, passive: true, desc: 'Auto-prompts on 6th wrong guess' },
+  // Legendary
+  shield: { name: 'Shield', emoji: '🛡️', type: 'powerup', legendary: true, desc: 'Blocks ALL sabotages for duration' },
+  xray_vision: { name: 'X-Ray Vision', emoji: '👁️', type: 'powerup', legendary: true, desc: 'See all players\' boards for 10s' },
   identity_theft: { name: 'Identity Theft', emoji: '🔄', type: 'sabotage', needsTarget: true, legendary: true, desc: 'Swap all progress with target' }
 };
 
@@ -48,13 +50,18 @@ export default function GameScreen({ showResults = false }) {
     isBonusTime,
     itemEarningNotifications,
     xrayBoards,
-    getFullWord
+    getFullWord,
+    showSecondChancePrompt,
+    setShowSecondChancePrompt,
+    mirrorShieldPrompt,
+    setMirrorShieldPrompt,
+    setItemNotification
   } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
   const isHost = gameState?.hostId === playerId;
 
-  const { submitGuess, forceEndRound, endGame, useItem, letterSnipe, debugGiveAllItems } = useSocket();
+  const { submitGuess, forceEndRound, endGame, useItem, letterSnipe, debugGiveAllItems, activateSecondChance, respondMirrorShield } = useSocket();
   const [showHostMenu, setShowHostMenu] = useState(false);
   const [showOtherPlayers, setShowOtherPlayers] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +106,8 @@ export default function GameScreen({ showResults = false }) {
       return;
     }
 
-    if (playerState?.solved || playerState?.guesses?.length >= 6) {
+    const maxGuessesAllowed = playerState?.hasSecondChance ? 7 : 6;
+    if (playerState?.solved || playerState?.guesses?.length >= maxGuessesAllowed) {
       return;
     }
 
@@ -117,7 +125,8 @@ export default function GameScreen({ showResults = false }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (showResults || !gameState || gameState.state !== 'playing') return;
-      if (playerState?.solved || playerState?.guesses?.length >= 6) return;
+      const maxGuessesAllowed = playerState?.hasSecondChance ? 7 : 6;
+      if (playerState?.solved || playerState?.guesses?.length >= maxGuessesAllowed) return;
 
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -137,7 +146,8 @@ export default function GameScreen({ showResults = false }) {
 
   // Handle tappable keyboard
   const handleKeyPress = useCallback((key) => {
-    if (playerState?.solved || playerState?.guesses?.length >= 6) return;
+    const maxGuessesAllowed = playerState?.hasSecondChance ? 7 : 6;
+    if (playerState?.solved || playerState?.guesses?.length >= maxGuessesAllowed) return;
 
     if (key === 'ENTER') {
       handleSubmit();
@@ -153,8 +163,9 @@ export default function GameScreen({ showResults = false }) {
     const info = ITEM_INFO[item.id];
     if (!info) return;
 
+    // Passive items can't be clicked
     if (info.passive) {
-      showToast('Shield blocks sabotages automatically!');
+      showToast(`${info.emoji} ${info.name} activates automatically!`);
       return;
     }
 
@@ -165,10 +176,17 @@ export default function GameScreen({ showResults = false }) {
       setSelectedItem(item);
       setShowLetterPicker(true);
     } else {
-      // Direct use items (letter_reveal, time_warp)
+      // Direct use items (shield, xray_vision)
       useItem(item.id).catch(err => showToast(err.message));
     }
   }, [useItem, showToast]);
+
+  // Clear item notification when typing
+  useEffect(() => {
+    if (currentInput.length > 0 && itemNotification) {
+      setItemNotification(null);
+    }
+  }, [currentInput, itemNotification, setItemNotification]);
 
   const handleTargetSelect = useCallback(async (targetId) => {
     if (!selectedItem) return;
@@ -233,7 +251,8 @@ export default function GameScreen({ showResults = false }) {
 
   const roundTimeSeconds = Math.floor(roundTimeRemaining / 1000);
   const isCriticalRound = roundTimeSeconds < 30;
-  const canType = !showResults && !isEliminated && !playerState?.solved && playerState?.guesses?.length < 6;
+  const maxGuesses = playerState?.hasSecondChance ? 7 : 6;
+  const canType = !showResults && !isEliminated && !playerState?.solved && playerState?.guesses?.length < maxGuesses;
 
   return (
     <div className="h-[100dvh] flex flex-col p-2 sm:p-4 overflow-hidden">
@@ -400,6 +419,7 @@ export default function GameScreen({ showResults = false }) {
               guesses={playerState?.guesses || []}
               results={hasInvisibleInk ? [] : (playerState?.results || [])}
               currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
+              maxGuesses={playerState?.hasSecondChance ? 7 : 6}
               isCurrentPlayer={true}
               playerName={currentPlayer?.name || 'You'}
               solved={playerState?.solved || false}
@@ -420,6 +440,7 @@ export default function GameScreen({ showResults = false }) {
                 guesses={playerState?.guesses || []}
                 results={hasInvisibleInk ? [] : (playerState?.results || [])}
                 currentInput={hasInvisibleInk ? '•'.repeat(currentInput.length) : currentInput}
+                maxGuesses={playerState?.hasSecondChance ? 7 : 6}
                 isCurrentPlayer={true}
                 playerName={currentPlayer?.name || 'You'}
                 solved={playerState?.solved || false}
@@ -655,11 +676,16 @@ export default function GameScreen({ showResults = false }) {
                   w-[2.6rem] h-[2.6rem] rounded-lg text-lg
                   flex items-center justify-center
                   transition-all transform hover:scale-105 active:scale-95
-                  ${isPassive ? 'bg-blue-500/20' :
-                    info?.type === 'sabotage' ? 'bg-red-500/20 hover:bg-red-500/40' :
-                    'bg-green-500/20 hover:bg-green-500/40'}
+                  ${info?.legendary
+                    ? 'bg-gradient-to-br from-yellow-500/40 to-amber-600/40 ring-2 ring-yellow-400/60 animate-pulse'
+                    : info?.rare
+                      ? 'bg-gradient-to-br from-purple-500/30 to-violet-600/30 ring-1 ring-purple-400/50'
+                      : isPassive
+                        ? 'bg-blue-500/20'
+                        : info?.type === 'sabotage'
+                          ? 'bg-red-500/20 hover:bg-red-500/40'
+                          : 'bg-green-500/20 hover:bg-green-500/40'}
                   ${currentPlayer?.usedItemThisRound && !isPassive ? 'opacity-40 cursor-not-allowed' : ''}
-                  ${info?.legendary ? 'animate-pulse' : ''}
                 `}
               >
                 {info?.emoji || '?'}
@@ -672,8 +698,8 @@ export default function GameScreen({ showResults = false }) {
 
       {/* Target Picker Modal - Grid View */}
       {showTargetPicker && selectedItem && (
-        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-3">
-          <div className="flex items-center justify-between mb-3">
+        <div className="fixed inset-0 bg-black/95 flex flex-col z-50 p-3 pt-[env(safe-area-inset-top)]">
+          <div className="flex items-center justify-between mb-3 shrink-0">
             <div>
               <span className="text-xs text-white/50">
                 {ITEM_INFO[selectedItem.id]?.emoji} {ITEM_INFO[selectedItem.id]?.name} · tap a player
@@ -687,8 +713,8 @@ export default function GameScreen({ showResults = false }) {
               ×
             </button>
           </div>
-          <div className="flex-1 overflow-auto flex items-center justify-center">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl">
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl mx-auto">
               {otherPlayers.filter(p => !p.eliminated && !p.solved).map((player) => (
                 <button
                   key={player.id}
@@ -714,7 +740,7 @@ export default function GameScreen({ showResults = false }) {
               ))}
             </div>
             {otherPlayers.filter(p => !p.eliminated && !p.solved).length === 0 && (
-              <div className="text-center text-white/40">No valid targets</div>
+              <div className="text-center text-white/40 mt-8">No valid targets</div>
             )}
           </div>
         </div>
@@ -826,10 +852,17 @@ export default function GameScreen({ showResults = false }) {
       {/* X-Ray Vision Overlay - See all players' boards */}
       {xrayBoards && Object.keys(xrayBoards).length > 0 && (
         <div className="fixed inset-0 bg-black/90 z-50 p-4 overflow-auto">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-2xl">👁️</span>
-            <span className="text-purple-300 font-bold">X-RAY VISION</span>
-            <span className="text-white/50 text-sm">· seeing all boards</span>
+          <div className="flex items-center justify-between mb-3 max-w-3xl mx-auto">
+            <div className="flex items-center gap-1.5">
+              <span className="text-lg">👁️</span>
+              <span className="text-purple-300 text-sm font-medium">X-Ray</span>
+            </div>
+            <button
+              onClick={() => useGameStore.getState().setXrayBoards(null)}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 flex items-center justify-center text-lg"
+            >
+              ×
+            </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
             {Object.entries(xrayBoards).map(([id, board]) => (
@@ -849,6 +882,70 @@ export default function GameScreen({ showResults = false }) {
                 />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Second Chance Prompt Modal */}
+      {showSecondChancePrompt && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+            <div className="text-4xl mb-3">🔁</div>
+            <h3 className="text-xl font-bold mb-2">Second Chance!</h3>
+            <p className="text-white/70 mb-4">
+              You've used all 6 guesses. Use your Second Chance for one more try?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSecondChancePrompt(false);
+                }}
+                className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 font-medium transition-colors"
+              >
+                No Thanks
+              </button>
+              <button
+                onClick={() => {
+                  activateSecondChance().catch(err => showToast(err.message));
+                }}
+                className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
+              >
+                Use It!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mirror Shield Prompt Modal */}
+      {mirrorShieldPrompt && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+            <div className="text-4xl mb-3">🪞</div>
+            <h3 className="text-xl font-bold mb-2 text-red-400">Incoming Attack!</h3>
+            <p className="text-white/70 mb-4">
+              <span className="font-bold text-white">{mirrorShieldPrompt.attacker}</span> used{' '}
+              <span className="font-bold text-red-400">{mirrorShieldPrompt.item?.emoji} {mirrorShieldPrompt.item?.name}</span> on you!
+            </p>
+            <p className="text-purple-300 mb-4">Use Mirror Shield to reflect it back?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  respondMirrorShield(false).catch(err => showToast(err.message));
+                }}
+                className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 font-medium transition-colors"
+              >
+                Take Hit
+              </button>
+              <button
+                onClick={() => {
+                  respondMirrorShield(true).catch(err => showToast(err.message));
+                }}
+                className="flex-1 py-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold transition-colors"
+              >
+                🪞 Reflect!
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -294,8 +294,53 @@ export function useSocket() {
         });
       });
 
+      // Mirror Shield reflection events
+      socket.on('mirrorReflected', ({ reflectedBy, item, blocked }) => {
+        // Attacker's sabotage was reflected/blocked
+        useGameStore.getState().setItemNotification({
+          type: 'sabotaged',
+          message: blocked
+            ? `${reflectedBy} blocked your ${item.name}!`
+            : `${reflectedBy} reflected your ${item.name}!`,
+          emoji: '🪞'
+        });
+      });
+
+      socket.on('mirrorProtected', ({ attacker, item, blocked }) => {
+        // Target's mirror shield protected them
+        useGameStore.getState().setItemNotification({
+          type: 'received',
+          message: blocked
+            ? `Mirror Shield blocked ${attacker}'s ${item.name}!`
+            : `Mirror Shield reflected ${attacker}'s ${item.name}!`,
+          emoji: '🪞'
+        });
+      });
+
       socket.on('inventoryUpdate', ({ inventory }) => {
         useGameStore.getState().setInventory(inventory);
+      });
+
+      // Second Chance prompt - show when player has 6 guesses and Second Chance in inventory
+      socket.on('secondChancePrompt', () => {
+        useGameStore.getState().setShowSecondChancePrompt(true);
+      });
+
+      // Second Chance activated
+      socket.on('secondChanceActivated', ({ message }) => {
+        useGameStore.getState().setShowSecondChancePrompt(false);
+        useGameStore.getState().showToast(message, 2000);
+      });
+
+      // Shield activated with duration
+      socket.on('shieldActivated', ({ duration }) => {
+        const seconds = Math.round(duration / 1000);
+        useGameStore.getState().showToast(`Shield active for ${seconds}s!`, 2000);
+      });
+
+      // Mirror Shield prompt - show when sabotaged and have mirror shield
+      socket.on('mirrorShieldPrompt', ({ attacker, item }) => {
+        useGameStore.getState().setMirrorShieldPrompt({ attacker, item });
       });
 
       // Broadcast when any player earns an item (visible to all)
@@ -571,6 +616,31 @@ export function useSocket() {
     });
   }, []);
 
+  const activateSecondChance = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      socket.emit('activateSecondChance', (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to activate Second Chance'));
+        }
+      });
+    });
+  }, []);
+
+  const respondMirrorShield = useCallback((useMirror) => {
+    return new Promise((resolve, reject) => {
+      socket.emit('respondMirrorShield', { useMirror }, (response) => {
+        useGameStore.getState().setMirrorShieldPrompt(null);
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to respond'));
+        }
+      });
+    });
+  }, []);
+
   return {
     socket,
     createRoom,
@@ -588,6 +658,8 @@ export function useSocket() {
     leaveRoom,
     useItem,
     letterSnipe,
-    debugGiveAllItems
+    debugGiveAllItems,
+    activateSecondChance,
+    respondMirrorShield
   };
 }

@@ -8,73 +8,140 @@ import { getRandomWord, isValidWord } from './words.js';
 export const ITEMS = {
   // Power-ups (help yourself)
   LETTER_SNIPE: { id: 'letter_snipe', type: 'powerup', name: 'Letter Snipe', rarity: 'common', emoji: '🎯' },
-  SHIELD: { id: 'shield', type: 'powerup', name: 'Shield', rarity: 'common', emoji: '🛡️' },
-  LETTER_REVEAL: { id: 'letter_reveal', type: 'powerup', name: 'Letter Reveal', rarity: 'uncommon', emoji: '✨' },
-  TIME_WARP: { id: 'time_warp', type: 'powerup', name: 'Time Warp', rarity: 'uncommon', emoji: '⏰' },
+  SHIELD: { id: 'shield', type: 'powerup', name: 'Shield', rarity: 'legendary', emoji: '🛡️' },
+  MIRROR_SHIELD: { id: 'mirror_shield', type: 'powerup', name: 'Mirror Shield', rarity: 'rare', emoji: '🪞' },
+  SECOND_CHANCE: { id: 'second_chance', type: 'powerup', name: 'Second Chance', rarity: 'rare', emoji: '🔁' },
   XRAY_VISION: { id: 'xray_vision', type: 'powerup', name: 'X-Ray Vision', rarity: 'legendary', emoji: '👁️' },
 
   // Sabotages (hurt opponents) - Duration: 35% of round time
-  BLINDFOLD: { id: 'blindfold', type: 'sabotage', name: 'Blindfold', rarity: 'common', emoji: '🙈' },
+  BLINDFOLD: { id: 'blindfold', type: 'sabotage', name: 'Blindfold', rarity: 'rare', emoji: '🙈' },
   FLIP_IT: { id: 'flip_it', type: 'sabotage', name: 'Flip It', rarity: 'common', emoji: '🙃' },
-  KEYBOARD_SHUFFLE: { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', rarity: 'uncommon', emoji: '🔀' },
-  INVISIBLE_INK: { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', rarity: 'uncommon', emoji: '👻' },
-  AMNESIA: { id: 'amnesia', type: 'sabotage', name: 'Amnesia', rarity: 'rare', emoji: '🧠', permanent: true },
+  KEYBOARD_SHUFFLE: { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', rarity: 'common', emoji: '🔀' },
+  INVISIBLE_INK: { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', rarity: 'rare', emoji: '👻' },
   IDENTITY_THEFT: { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', rarity: 'legendary', emoji: '🔄', instant: true }
 };
 
-// Rarity pools for drops
+// Rarity pools for drops (3 tiers: common, rare, legendary)
 export const RARITY_POOLS = {
-  common: ['letter_snipe', 'shield', 'blindfold', 'flip_it'],
-  uncommon: ['letter_reveal', 'time_warp', 'keyboard_shuffle', 'invisible_ink'],
-  rare: ['amnesia'],
-  legendary: ['identity_theft', 'xray_vision']
+  common: ['letter_snipe', 'flip_it', 'keyboard_shuffle'],
+  rare: ['invisible_ink', 'blindfold', 'mirror_shield', 'second_chance'],
+  legendary: ['identity_theft', 'xray_vision', 'shield']
 };
 
 // Item Round Challenge Types
 export const CHALLENGES = {
   SPEED_SOLVE: { id: 'speed_solve', name: 'Speed Solve', description: 'Solve in under 25 seconds', emoji: '⚡' },
   RARE_LETTERS: { id: 'rare_letters', name: 'Rare Letters', description: 'Use Z, X, Q, or J in a guess', emoji: '💎' },
-  FIRST_BLOOD: { id: 'first_blood', name: 'First Blood', description: 'First player to submit a guess', emoji: '🩸' },
+  FIRST_BLOOD: { id: 'first_blood', name: 'First Blood', description: 'First player to solve the word', emoji: '🩸' },
   EFFICIENCY: { id: 'efficiency', name: 'Efficiency', description: 'Solve in 3 guesses or less', emoji: '🎯' }
 };
 
 // Rare letters for the challenge
 export const RARE_LETTERS = ['Z', 'X', 'Q', 'J'];
 
+// Drop chances per round based on position
+export const DROP_CHANCES = {
+  underdog: 50, // 50% chance to get item
+  middle: 30,   // 30% chance
+  leader: 15    // 15% chance
+};
+
+// Rarity chances based on position (3 tiers: common, rare, legendary)
+export const RARITY_CHANCES = {
+  underdog: { legendary: 20, rare: 40, common: 40 },
+  middle: { legendary: 15, rare: 35, common: 50 },
+  leader: { legendary: 10, rare: 30, common: 60 }
+};
+
+// Check if player gets a drop this round
+export function shouldGetDrop(playerPosition, totalPlayers) {
+  const isLeader = playerPosition <= 2;
+  const isUnderdog = playerPosition >= totalPlayers - 1;
+
+  let dropChance;
+  if (isUnderdog) dropChance = DROP_CHANCES.underdog;
+  else if (isLeader) dropChance = DROP_CHANCES.leader;
+  else dropChance = DROP_CHANCES.middle;
+
+  return Math.random() * 100 < dropChance;
+}
+
 // Get random item based on player position (Mario Kart style)
 export function getRandomDrop(playerPosition, totalPlayers, isPowerUpOnly = false, isSabotageOnly = false) {
   const isLeader = playerPosition <= 2;
   const isUnderdog = playerPosition >= totalPlayers - 1;
 
-  let eligibleItems = [];
+  // Determine rarity based on weighted chance (3 tiers)
+  const roll = Math.random() * 100;
+  let rarity;
+  let chances;
 
-  if (isPowerUpOnly || (!isSabotageOnly && !isLeader)) {
-    // Leaders can't get power-ups, others can
-    if (!isLeader) {
-      eligibleItems.push(...RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup'));
-      if (isUnderdog) {
-        eligibleItems.push(...RARITY_POOLS.uncommon.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup'));
+  if (isUnderdog) chances = RARITY_CHANCES.underdog;
+  else if (isLeader) chances = RARITY_CHANCES.leader;
+  else chances = RARITY_CHANCES.middle;
+
+  if (roll < chances.legendary) rarity = 'legendary';
+  else if (roll < chances.legendary + chances.rare) rarity = 'rare';
+  else rarity = 'common';
+
+  // Get items from the selected rarity pool
+  let eligibleItems = [...RARITY_POOLS[rarity]];
+
+  // Filter by type if requested
+  if (isPowerUpOnly) {
+    eligibleItems = eligibleItems.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup');
+  } else if (isSabotageOnly) {
+    eligibleItems = eligibleItems.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage');
+  }
+
+  // If no items in selected rarity match criteria, try other rarities
+  if (eligibleItems.length === 0) {
+    const allRarities = ['common', 'rare', 'legendary'];
+    for (const r of allRarities) {
+      let pool = [...RARITY_POOLS[r]];
+      if (isPowerUpOnly) {
+        pool = pool.filter(id => ITEMS[id.toUpperCase()]?.type === 'powerup');
+      } else if (isSabotageOnly) {
+        pool = pool.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage');
+      }
+      if (pool.length > 0) {
+        eligibleItems = pool;
+        break;
       }
     }
   }
 
-  if (isSabotageOnly || !isPowerUpOnly) {
-    // Everyone can get sabotages
-    eligibleItems.push(...RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage'));
-    eligibleItems.push(...RARITY_POOLS.uncommon.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage'));
-    if (isUnderdog) {
-      eligibleItems.push(...RARITY_POOLS.rare);
-      eligibleItems.push(...RARITY_POOLS.legendary);
-    }
-  }
-
+  // Final fallback
   if (eligibleItems.length === 0) {
-    // Fallback: give a common sabotage
-    eligibleItems = RARITY_POOLS.common.filter(id => ITEMS[id.toUpperCase()]?.type === 'sabotage');
+    eligibleItems = RARITY_POOLS.common;
   }
 
   const randomId = eligibleItems[Math.floor(Math.random() * eligibleItems.length)];
   return ITEMS[randomId.toUpperCase()];
+}
+
+// Get random drops for a round - each player has individual chance based on position
+// Returns array of { playerId, item }
+export function getRandomRoundDrops(players, playerCount) {
+  const drops = [];
+
+  // Sort players by score to determine position
+  const sortedPlayers = [...players].sort((a, b) => b.totalScore - a.totalScore);
+
+  for (let i = 0; i < sortedPlayers.length; i++) {
+    const player = sortedPlayers[i];
+    const position = i + 1; // 1-indexed position
+
+    // Check if this player gets a drop based on their position
+    if (shouldGetDrop(position, playerCount)) {
+      drops.push({
+        playerId: player.id,
+        item: getRandomDrop(position, playerCount)
+      });
+    }
+  }
+
+  return drops;
 }
 
 // Calculate sabotage duration (35% of round time)
@@ -183,7 +250,7 @@ export class GameRoom {
     this.itemRounds = new Set(); // Which rounds are Item Rounds
     this.currentChallenge = null; // Current Item Round challenge
     this.itemRoundReward = null; // Pre-determined reward for this Item Round
-    this.firstGuessPlayerId = null; // For First Blood challenge
+    this.firstSolverPlayerId = null; // For First Blood challenge (first to solve)
     this.challengeCompletedBy = new Set(); // Players who completed the challenge this round
 
     // Add host as first player
@@ -216,10 +283,10 @@ export class GameRoom {
       // Fresh Openers tracking
       usedOpeners: [],
       // Power-ups & Sabotages
-      inventory: [], // Max 3 items: { type, id, rarity }
-      usedItemThisRound: false,
-      hasShield: false, // Shield power-up active
-      activeEffects: [], // Active sabotage effects: { type, expiresAt, data }
+      inventory: [],
+      hasMirrorShield: false, // Mirror Shield - one-time reflect, then expires
+      hasSecondChance: false, // Second Chance - allows 7th guess
+      activeEffects: [], // Active effects: { type, expiresAt, data } - includes shield
       earnCooldown: false, // Skill-based earn cooldown
       failedRoundsStreak: 0, // For Mercy Drop
       lastRoundPosition: null // For Comeback Drop
@@ -340,7 +407,7 @@ export class GameRoom {
     this.eliminatedThisRound = [];
 
     // Reset Item Round tracking (challenge and reward were pre-set during countdown)
-    this.firstGuessPlayerId = null;
+    this.firstSolverPlayerId = null;
     this.challengeCompletedBy = new Set();
 
     // Reset player states for new round (only non-eliminated players)
@@ -354,11 +421,11 @@ export class GameRoom {
         player.currentGuess = '';
         player.roundScore = 0;
         player.ready = false;
-        // Reset item usage for new round
-        player.usedItemThisRound = false;
+        // Reset item effects for new round
         player.activeEffects = [];
-        player.bonusTime = 0; // Reset Time Warp bonus
-        player.hasShield = false; // Reset shield each round
+        player.bonusTime = 0;
+        player.hasMirrorShield = false;
+        player.hasSecondChance = false;
       }
     }
 
@@ -408,7 +475,8 @@ export class GameRoom {
   
   submitGuess(playerId, guess) {
     const player = this.players.get(playerId);
-    if (!player || player.eliminated || player.solved || player.guesses.length >= 6) {
+    const maxGuesses = player?.hasSecondChance ? 7 : 6;
+    if (!player || player.eliminated || player.solved || player.guesses.length >= maxGuesses) {
       return { success: false, error: 'Cannot submit guess' };
     }
     
@@ -666,7 +734,8 @@ export class GameRoom {
           : null,
         // Power-ups & Sabotages
         inventoryCount: player.inventory.length,
-        hasShield: player.hasShield,
+        hasShield: this.hasActiveShield(id), // Duration-based shield check
+        hasMirrorShield: player.hasMirrorShield, // One-time reflect
         activeEffects: player.activeEffects.map(e => ({
           type: e.type,
           expiresAt: e.expiresAt,
@@ -760,14 +829,22 @@ export class GameRoom {
   useItem(playerId, itemId, targetId = null) {
     const player = this.players.get(playerId);
     if (!player) return { success: false, error: 'Player not found' };
-    if (player.usedItemThisRound) return { success: false, error: 'Already used an item this round' };
+    // Removed: usedItemThisRound limit - players can now use all their items
     if (player.eliminated) return { success: false, error: 'Eliminated players cannot use items' };
 
     const itemIndex = player.inventory.findIndex(i => i.id === itemId);
     if (itemIndex === -1) return { success: false, error: 'Item not in inventory' };
 
     const item = player.inventory[itemIndex];
-    const itemDef = ITEMS[itemId.toUpperCase()];
+
+    // Convert item id to ITEMS key format (e.g., 'mirror_shield' -> 'MIRROR_SHIELD')
+    const itemKey = itemId.toUpperCase();
+    const itemDef = ITEMS[itemKey];
+
+    if (!itemDef) {
+      console.error(`Unknown item: ${itemId} (key: ${itemKey})`);
+      return { success: false, error: 'Unknown item type' };
+    }
 
     // Validate target for sabotages
     if (item.type === 'sabotage' && !targetId) {
@@ -783,35 +860,29 @@ export class GameRoom {
       if (target.eliminated) return { success: false, error: 'Cannot target eliminated players' };
       if (targetId === playerId) return { success: false, error: 'Cannot target yourself' };
 
-      // Check for shield (auto-activates from inventory)
-      const shieldIndex = target.inventory.findIndex(i => i.id === 'shield');
-      if (target.hasShield || shieldIndex !== -1) {
-        // Remove shield from inventory if it was there
-        if (shieldIndex !== -1) {
-          target.inventory.splice(shieldIndex, 1);
-        }
-        target.hasShield = false;
+      // Check if target has Mirror Shield in inventory (will prompt them)
+      const hasMirrorShieldItem = target.inventory.some(i => i.id === 'mirror_shield');
+      if (hasMirrorShieldItem) {
+        // Remove attacker's item NOW (they used it, regardless of mirror shield response)
+        player.inventory.splice(itemIndex, 1);
+        // Don't apply sabotage yet - server will send prompt to target
+        result.pendingMirrorShield = true;
+        result.awaitingResponse = true;
+        return result;
+      }
+      // Check for Shield - blocks all sabotages while active (duration-based)
+      else if (this.hasActiveShield(targetId)) {
         result.blocked = true;
         result.blockedBy = target.name;
+        // Shield stays active - doesn't expire on block
       } else {
-        // Apply sabotage effect
+        // Apply sabotage effect to target
         const duration = itemDef.permanent ? null : getSabotageDuration(this.settings.roundTimeSeconds);
         const expiresAt = duration ? Date.now() + duration : null;
 
         if (itemId === 'identity_theft') {
           // Swap progress between players
           result.swapData = this.swapPlayerProgress(playerId, targetId);
-        } else if (itemId === 'keyboard_shuffle') {
-          // Generate shuffled keyboard
-          const letters = 'QWERTYUIOPASDFGHJKLZXCVBNM'.split('');
-          const shuffled = [...letters].sort(() => Math.random() - 0.5);
-          result.shuffledKeys = shuffled;
-          target.activeEffects.push({
-            type: itemId,
-            expiresAt,
-            fromPlayer: player.name,
-            data: { shuffledKeys: shuffled }
-          });
         } else {
           target.activeEffects.push({
             type: itemId,
@@ -829,14 +900,24 @@ export class GameRoom {
     // Handle power-ups
     if (item.type === 'powerup') {
       if (itemId === 'shield') {
-        player.hasShield = true;
+        // Shield is duration-based - blocks ALL sabotages while active
+        const duration = getSabotageDuration(this.settings.roundTimeSeconds);
+        player.activeEffects.push({
+          type: 'shield',
+          expiresAt: Date.now() + duration,
+          permanent: false
+        });
         result.activated = true;
-      } else if (itemId === 'time_warp') {
-        // Add 30 seconds - handled in server.js
-        result.timeBonus = 30000;
-      } else if (itemId === 'letter_reveal') {
-        // Reveal a random correct letter position
-        result.revealedLetter = this.revealRandomLetter(playerId);
+        result.duration = duration;
+      } else if (itemId === 'mirror_shield') {
+        // Mirror Shield is passive - activates via prompt when attacked
+        // This shouldn't be called directly, but just in case
+        result.activated = false;
+        result.error = 'Mirror Shield activates automatically when attacked';
+        return result;
+      } else if (itemId === 'second_chance') {
+        player.hasSecondChance = true;
+        result.activated = true;
       } else if (itemId === 'xray_vision') {
         // X-Ray Vision - see all players' boards for 10 seconds
         const duration = 10000; // 10 seconds
@@ -850,9 +931,8 @@ export class GameRoom {
       // letter_snipe is handled separately via letterSnipe method
     }
 
-    // Remove item from inventory and mark as used
+    // Remove item from inventory
     player.inventory.splice(itemIndex, 1);
-    player.usedItemThisRound = true;
 
     return result;
   }
@@ -947,6 +1027,75 @@ export class GameRoom {
     }
   }
 
+  // Check if player has active shield (duration-based)
+  hasActiveShield(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return false;
+    const now = Date.now();
+    return player.activeEffects.some(e => e.type === 'shield' && e.expiresAt > now);
+  }
+
+  // Apply a sabotage effect to a player (used after mirror shield decision)
+  applySabotage(targetId, itemId, fromPlayerId) {
+    const target = this.players.get(targetId);
+    const fromPlayer = this.players.get(fromPlayerId);
+    if (!target || !fromPlayer) return null;
+
+    const itemKey = itemId.toUpperCase();
+    const itemDef = ITEMS[itemKey];
+    if (!itemDef) return null;
+
+    const duration = itemDef.instant ? null : getSabotageDuration(this.settings.roundTimeSeconds);
+    const expiresAt = duration ? Date.now() + duration : null;
+
+    if (itemId === 'identity_theft') {
+      return {
+        type: 'identity_theft',
+        swapData: this.swapPlayerProgress(fromPlayerId, targetId)
+      };
+    } else {
+      target.activeEffects.push({
+        type: itemId,
+        expiresAt,
+        fromPlayer: fromPlayer.name,
+        permanent: itemDef.permanent || false
+      });
+      return { type: itemId, duration, expiresAt };
+    }
+  }
+
+  // Use mirror shield - reflects sabotage back to attacker
+  useMirrorShield(targetId, itemId, attackerId) {
+    const target = this.players.get(targetId);
+    if (!target) return { success: false, error: 'Player not found' };
+
+    // Find and remove mirror shield from inventory
+    const itemIndex = target.inventory.findIndex(i => i.id === 'mirror_shield');
+    if (itemIndex === -1) return { success: false, error: 'No Mirror Shield in inventory' };
+
+    target.inventory.splice(itemIndex, 1);
+
+    // Identity Theft is special - reflecting it just BLOCKS the swap entirely
+    // (swapping in reverse is the same as swapping, so we just cancel it)
+    if (itemId === 'identity_theft') {
+      return {
+        success: true,
+        reflected: true,
+        blocked: true, // Identity theft blocked, not actually applied to attacker
+        effect: { type: 'identity_theft', blocked: true }
+      };
+    }
+
+    // Apply the sabotage to the attacker instead
+    const effect = this.applySabotage(attackerId, itemId, targetId);
+
+    return {
+      success: true,
+      reflected: true,
+      effect
+    };
+  }
+
   // Get player's current position in standings
   getPlayerPosition(playerId) {
     const sorted = Array.from(this.players.values())
@@ -973,13 +1122,16 @@ export class GameRoom {
     return boards;
   }
 
-  // Check if First Blood challenge completed
+  // Check if First Blood challenge completed (first to SOLVE the word)
   checkFirstBlood(playerId) {
     if (!this.currentChallenge || this.currentChallenge.id !== 'first_blood') return false;
-    if (this.firstGuessPlayerId !== null) return false; // Already claimed
+    if (this.firstSolverPlayerId !== null) return false; // Already claimed
     if (this.challengeCompletedBy.has(playerId)) return false;
 
-    this.firstGuessPlayerId = playerId;
+    const player = this.players.get(playerId);
+    if (!player || !player.solved) return false; // Must have solved
+
+    this.firstSolverPlayerId = playerId;
     this.challengeCompletedBy.add(playerId);
     return true;
   }

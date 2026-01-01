@@ -39,6 +39,8 @@ export const useGameStore = create((set, get) => ({
   activeEffects: [], // { effect, expiresAt, data }
   itemEarningNotifications: [], // [{ playerName, item, trigger, challenge }] - shows when others earn items
   xrayBoards: null, // { playerId: { name, guesses, results, solved } } - X-Ray Vision data
+  showSecondChancePrompt: false, // Show prompt to activate Second Chance after 6 guesses
+  mirrorShieldPrompt: null, // { attacker, item } - Show prompt when sabotaged with mirror shield
 
   // Timers
   roundTimeRemaining: 0,
@@ -150,6 +152,8 @@ export const useGameStore = create((set, get) => ({
   },
   setInventory: (inventory) => set({ inventory }),
   setXrayBoards: (boards) => set({ xrayBoards: boards }),
+  setShowSecondChancePrompt: (show) => set({ showSecondChancePrompt: show }),
+  setMirrorShieldPrompt: (prompt) => set({ mirrorShieldPrompt: prompt }),
   addActiveEffect: ({ effect, duration, data }) => {
     const expiresAt = Date.now() + duration;
     set((state) => ({
@@ -197,7 +201,9 @@ export const useGameStore = create((set, get) => ({
     activeEffects: [],
     itemEarningNotifications: [],
     xrayBoards: null,
-    countdownItemRound: null
+    countdownItemRound: null,
+    showSecondChancePrompt: false,
+    mirrorShieldPrompt: null
   }),
   
   // Full reset
@@ -222,6 +228,8 @@ export const useGameStore = create((set, get) => ({
     revealedLetters: {},
     letterSnipeResult: null,
     itemEarningNotifications: [],
-    xrayBoards: null
+    xrayBoards: null,
+    showSecondChancePrompt: false,
+    mirrorShieldPrompt: null
   })
 }));
