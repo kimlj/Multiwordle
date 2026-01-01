@@ -17,6 +17,7 @@ const ITEM_INFO = {
   letter_snipe: { name: 'Letter Snipe', emoji: '🎯', type: 'powerup', needsLetter: true, desc: 'Check if a letter is in the word' },
   flip_it: { name: 'Flip It', emoji: '🙃', type: 'sabotage', needsTarget: true, desc: 'Flips screen upside down' },
   keyboard_shuffle: { name: 'Keyboard Shuffle', emoji: '🔀', type: 'sabotage', needsTarget: true, desc: 'Randomizes keyboard layout' },
+  sticky_keys: { name: 'Sticky Keys', emoji: '🍯', type: 'sabotage', needsTarget: true, desc: 'Every letter types twice' },
   // Rare
   blindfold: { name: 'Blindfold', emoji: '🙈', type: 'sabotage', needsTarget: true, rare: true, desc: 'Blanks their keyboard letters' },
   invisible_ink: { name: 'Invisible Ink', emoji: '👻', type: 'sabotage', needsTarget: true, rare: true, desc: 'Hides their guesses & colors' },

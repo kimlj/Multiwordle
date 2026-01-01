@@ -1530,6 +1530,7 @@ io.on('connection', (socket) => {
       { id: 'blindfold', type: 'sabotage', name: 'Blindfold', emoji: '🙈' },
       { id: 'flip_it', type: 'sabotage', name: 'Flip It', emoji: '🙃' },
       { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', emoji: '🔀' },
+      { id: 'sticky_keys', type: 'sabotage', name: 'Sticky Keys', emoji: '🍯' },
       { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', emoji: '👻' },
       { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', emoji: '🔄' }
     ];

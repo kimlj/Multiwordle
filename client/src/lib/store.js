@@ -84,12 +84,22 @@ export const useGameStore = create((set, get) => ({
   
   setCurrentInput: (input) => set({ currentInput: input.toUpperCase().slice(0, 5) }),
   addLetter: (letter) => {
-    const { currentInput, revealedLetters } = get();
+    const { currentInput, revealedLetters, activeEffects } = get();
     // Only allow typing up to (5 - numRevealed) letters
     const numRevealed = Object.keys(revealedLetters).length;
     const maxTypable = 5 - numRevealed;
+
+    // Check if sticky_keys effect is active
+    const hasStickyKeys = activeEffects.some(e => e.effect === 'sticky_keys' && e.expiresAt > Date.now());
+
     if (currentInput.length < maxTypable) {
-      set({ currentInput: currentInput + letter.toUpperCase() });
+      const upperLetter = letter.toUpperCase();
+      // Sticky keys: add letter twice (if there's room)
+      if (hasStickyKeys && currentInput.length + 1 < maxTypable) {
+        set({ currentInput: currentInput + upperLetter + upperLetter });
+      } else {
+        set({ currentInput: currentInput + upperLetter });
+      }
     }
   },
   removeLetter: () => {

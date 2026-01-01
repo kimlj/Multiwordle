@@ -17,13 +17,14 @@ export const ITEMS = {
   BLINDFOLD: { id: 'blindfold', type: 'sabotage', name: 'Blindfold', rarity: 'rare', emoji: '🙈' },
   FLIP_IT: { id: 'flip_it', type: 'sabotage', name: 'Flip It', rarity: 'common', emoji: '🙃' },
   KEYBOARD_SHUFFLE: { id: 'keyboard_shuffle', type: 'sabotage', name: 'Keyboard Shuffle', rarity: 'common', emoji: '🔀' },
+  STICKY_KEYS: { id: 'sticky_keys', type: 'sabotage', name: 'Sticky Keys', rarity: 'common', emoji: '🍯' },
   INVISIBLE_INK: { id: 'invisible_ink', type: 'sabotage', name: 'Invisible Ink', rarity: 'rare', emoji: '👻' },
   IDENTITY_THEFT: { id: 'identity_theft', type: 'sabotage', name: 'Identity Theft', rarity: 'legendary', emoji: '🔄', instant: true }
 };
 
 // Rarity pools for drops (3 tiers: common, rare, legendary)
 export const RARITY_POOLS = {
-  common: ['letter_snipe', 'flip_it', 'keyboard_shuffle'],
+  common: ['letter_snipe', 'flip_it', 'keyboard_shuffle', 'sticky_keys'],
   rare: ['invisible_ink', 'blindfold', 'mirror_shield', 'second_chance'],
   legendary: ['identity_theft', 'xray_vision', 'shield']
 };
