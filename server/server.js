@@ -804,14 +804,38 @@ io.on('connection', (socket) => {
   socket.on('updateName', ({ newName }) => {
     const roomCode = playerRooms.get(socket.id);
     if (!roomCode) return;
-    
+
     const room = gameManager.getRoom(roomCode);
     if (!room) return;
-    
+
     room.updatePlayerName(socket.id, newName);
     io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
   });
-  
+
+  // Chat message
+  socket.on('chatMessage', ({ message }) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) return;
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room) return;
+
+    const player = room.players.get(socket.id);
+    if (!player) return;
+
+    // Sanitize and limit message
+    const sanitizedMessage = message.slice(0, 200).trim();
+    if (!sanitizedMessage) return;
+
+    // Broadcast to all players in room
+    io.to(roomCode).emit('chatMessage', {
+      playerId: socket.id,
+      playerName: player.name,
+      message: sanitizedMessage,
+      timestamp: Date.now()
+    });
+  });
+
   // Toggle ready status
   socket.on('toggleReady', (callback) => {
     const roomCode = playerRooms.get(socket.id);

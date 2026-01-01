@@ -3,13 +3,14 @@ import { useGameStore } from '../lib/store';
 import { useSocket } from '../hooks/useSocket';
 import InfoModal from './InfoModal';
 import DevFooter from './DevFooter';
+import LobbyChat from './LobbyChat';
 
 export default function LobbyScreen({ waitingForOthers = false }) {
   const { gameState, playerId, roomCode, showToast } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
   const isHost = gameState?.hostId === playerId;
-  const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom } = useSocket();
+  const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom, socket } = useSocket();
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [customWords, setCustomWords] = useState([]);
@@ -663,6 +664,9 @@ export default function LobbyScreen({ waitingForOthers = false }) {
 
       {/* Info Modal */}
       <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
+
+      {/* Lobby Chat */}
+      <LobbyChat socket={socket} />
     </div>
   );
 }
