@@ -233,7 +233,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                           maxLength={20}
                         />
                       ) : (
-                        <span className="text-sm truncate">
+                        <span className="text-sm truncate text-white/70">
                           {player.name}
                           {player.id === playerId && <span className="text-white/40 text-xs"> (You)</span>}
                         </span>
@@ -574,13 +574,13 @@ export default function LobbyScreen({ waitingForOthers = false }) {
             </div>
 
             {/* Players List */}
-            <div className="glass rounded-2xl p-4">
-              <h2 className="font-bold text-sm mb-2 flex items-center gap-2">
+            <div className="glass rounded-2xl p-4 h-[60vh] flex flex-col">
+              <h2 className="font-bold text-sm mb-2 flex items-center gap-2 shrink-0">
                 <span>Players</span>
                 <span className="text-white/40 text-xs">({players.length})</span>
               </h2>
 
-              <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
+              <div className="space-y-1.5 flex-1 overflow-y-auto">
                 {players.map((player) => (
                   <div
                     key={player.id}
@@ -606,7 +606,7 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                           maxLength={20}
                         />
                       ) : (
-                        <span className="text-sm truncate">
+                        <span className="text-sm truncate text-white/70">
                           {player.name}
                           {player.id === playerId && <span className="text-white/40 text-xs"> (You)</span>}
                         </span>
@@ -630,23 +630,25 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                 ))}
               </div>
 
-              {/* Ready Button */}
-              <button
-                onClick={toggleReady}
-                className={`w-full mt-4 py-3 rounded-xl font-bold transition-all ${
-                  currentPlayer?.ready
-                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
-                    : 'bg-wordle-green text-white hover:bg-wordle-green/90'
-                }`}
-              >
-                {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
-              </button>
+              {/* Ready Button - pinned at bottom */}
+              <div className="shrink-0 pt-4 mt-auto border-t border-white/10">
+                <button
+                  onClick={toggleReady}
+                  className={`w-full py-3 rounded-xl font-bold transition-all ${
+                    currentPlayer?.ready
+                      ? 'bg-white/10 text-white/60 hover:bg-white/20'
+                      : 'bg-wordle-green text-white hover:bg-wordle-green/90'
+                  }`}
+                >
+                  {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}
+                </button>
 
-              {allReady && (
-                <div className="mt-3 text-center text-white/50 text-xs">
-                  Waiting for host to start...
-                </div>
-              )}
+                {allReady && (
+                  <div className="mt-3 text-center text-white/50 text-xs">
+                    Waiting for host to start...
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

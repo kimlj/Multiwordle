@@ -147,12 +147,26 @@ function HowToPlayTab() {
       <section>
         <h3 className="font-bold text-sm text-wordle-yellow mb-2">Scoring</h3>
         <div className="space-y-2 text-xs">
-          <div className="flex justify-between items-center bg-white/5 rounded p-2">
-            <span className="text-white/60">Base Score</span>
-            <span className="font-bold text-wordle-green">+1000</span>
+          {/* Formula */}
+          <div className="bg-wordle-green/10 border border-wordle-green/30 rounded p-2">
+            <div className="text-[10px] text-white/50 mb-1">Formula</div>
+            <div className="font-mono text-white text-[11px] text-center">
+              Base + Guess Bonus + Time Bonus
+            </div>
+            <div className="text-[10px] text-white/40 text-center mt-1">
+              Max: 2400 pts (1 guess, instant solve)
+            </div>
           </div>
+
           <div className="bg-white/5 rounded p-2">
-            <div className="text-white/60 mb-1">Guess Bonus</div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/60">Base Score</span>
+              <span className="font-bold text-wordle-green">+1000</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 rounded p-2">
+            <div className="text-white/60 mb-1">Guess Bonus <span className="text-white/40 font-normal">fewer = better</span></div>
             <div className="grid grid-cols-3 gap-1 text-[10px]">
               <div className="flex justify-between"><span>1</span><span className="text-wordle-green">+900</span></div>
               <div className="flex justify-between"><span>2</span><span className="text-wordle-green">+750</span></div>
@@ -162,9 +176,14 @@ function HowToPlayTab() {
               <div className="flex justify-between"><span>6</span><span className="text-wordle-green">+150</span></div>
             </div>
           </div>
+
           <div className="bg-white/5 rounded p-2">
-            <div className="text-white/60 mb-1">Time Bonus (up to +500)</div>
-            <p className="text-[10px] text-white/50">Faster = more points. seconds_left × (500 ÷ round_time)</p>
+            <div className="text-white/60 mb-1">Time Bonus <span className="text-white/40 font-normal">(timeLeft ÷ totalTime) × 500</span></div>
+            <div className="text-[10px] text-white/50 space-y-0.5">
+              <p>• Solve instantly → <span className="text-wordle-green">+500</span></p>
+              <p>• Solve at 50% time → <span className="text-wordle-green">+250</span></p>
+              <p>• Solve at last second → <span className="text-wordle-green">+0</span></p>
+            </div>
           </div>
         </div>
       </section>
