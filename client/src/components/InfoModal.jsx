@@ -82,7 +82,7 @@ export default function InfoModal({ isOpen, onClose, initialTab = 'howto' }) {
       onClick={handleClose}
     >
       <div
-        className={`glass rounded-xl w-full max-w-lg h-[85vh] flex flex-col transition-all duration-200 ${
+        className={`bg-zinc-900 border border-white/10 rounded-xl w-full max-w-lg h-[85vh] flex flex-col transition-all duration-200 ${
           isClosing ? 'opacity-0 translate-y-4' : 'animate-slide-up'
         }`}
         onClick={e => e.stopPropagation()}
