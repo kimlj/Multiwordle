@@ -2,6 +2,7 @@
 
 // Audio context for generating sounds
 let audioContext = null;
+let isAudioUnlocked = false;
 
 function getAudioContext() {
   if (!audioContext) {
@@ -14,6 +15,35 @@ function getAudioContext() {
 export function vibrate(pattern) {
   if (navigator.vibrate) {
     navigator.vibrate(pattern);
+  }
+}
+
+// Initialize audio on user interaction (required for mobile)
+// Call this on first touch/click in the app
+export function initAudio() {
+  if (isAudioUnlocked) return;
+
+  try {
+    const ctx = getAudioContext();
+
+    // Resume if suspended
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    // Play a silent sound to unlock audio
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, ctx.currentTime); // Silent
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.001);
+
+    isAudioUnlocked = true;
+    console.log('Audio unlocked for notifications');
+  } catch (e) {
+    console.warn('Could not init audio:', e);
   }
 }
 

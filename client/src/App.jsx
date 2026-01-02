@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from './lib/store';
 import { useSocket } from './hooks/useSocket';
+import { initAudio } from './lib/sounds';
 import HomeScreen from './components/HomeScreen';
 import LobbyScreen from './components/LobbyScreen';
 import GameScreen from './components/GameScreen';
@@ -35,6 +36,24 @@ function AppRouter() {
 function GameApp() {
   const { gameState, showCountdown, toast, isReconnecting, connected, playerId } = useGameStore();
   useSocket(); // Initialize socket connection
+
+  // Initialize audio on first user interaction (required for mobile)
+  useEffect(() => {
+    const handleInteraction = () => {
+      initAudio();
+      // Remove listeners after first interaction
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('click', handleInteraction);
+    };
+
+    document.addEventListener('touchstart', handleInteraction, { once: true });
+    document.addEventListener('click', handleInteraction, { once: true });
+
+    return () => {
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('click', handleInteraction);
+    };
+  }, []);
 
   const renderScreen = () => {
     // Show loading screen while reconnecting to a previous session
