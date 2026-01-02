@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useGameStore } from '../lib/store';
+import { playNudgeSound, playSolveSound } from '../lib/sounds';
 
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 const SESSION_KEY = 'wordle_session';
@@ -191,6 +192,7 @@ export function useSocket() {
         const player = gameState.players[playerId];
         if (player && solved) {
           useGameStore.getState().addSolveNotification(player.name, guessNumber);
+          playSolveSound(); // Play sound and vibrate
         }
       });
 
@@ -391,6 +393,7 @@ export function useSocket() {
       socket.on('nudgeToReady', ({ fromPlayer }) => {
         useGameStore.getState().setNudgeNotification(true);
         showToast(`${fromPlayer} wants you to get ready!`, 3000);
+        playNudgeSound(); // Play sound and vibrate
         // Auto-clear nudge animation after 2 seconds
         setTimeout(() => {
           useGameStore.getState().setNudgeNotification(false);
