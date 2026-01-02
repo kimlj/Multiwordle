@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useGameStore } from '../lib/store';
-import { playNudgeSound, playSolveSound } from '../lib/sounds';
+import { playNudgeSound } from '../lib/sounds';
 
 const SOCKET_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
 const SESSION_KEY = 'wordle_session';
@@ -192,7 +192,6 @@ export function useSocket() {
         const player = gameState.players[playerId];
         if (player && solved) {
           useGameStore.getState().addSolveNotification(player.name, guessNumber);
-          playSolveSound(); // Play sound and vibrate
         }
       });
 
