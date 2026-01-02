@@ -48,14 +48,17 @@ export function initAudio() {
 }
 
 // Generate a notification beep sound
-export function playNudgeSound() {
+export async function playNudgeSound() {
   try {
     const ctx = getAudioContext();
 
-    // Resume context if suspended (required for mobile)
+    // Resume context if suspended (required for mobile) - MUST await this
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      await ctx.resume();
     }
+
+    // Vibrate immediately (doesn't require audio context)
+    vibrate([100, 50, 100]);
 
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
@@ -78,22 +81,23 @@ export function playNudgeSound() {
 
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.3);
-
-    // Vibrate pattern: short-pause-short
-    vibrate([100, 50, 100]);
   } catch (e) {
     console.warn('Could not play nudge sound:', e);
   }
 }
 
 // Generate a pleasant "ding" for solve notification
-export function playSolveSound() {
+export async function playSolveSound() {
   try {
     const ctx = getAudioContext();
 
+    // Resume context if suspended (required for mobile) - MUST await this
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      await ctx.resume();
     }
+
+    // Vibrate immediately (doesn't require audio context)
+    vibrate(50);
 
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
@@ -113,9 +117,6 @@ export function playSolveSound() {
 
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.4);
-
-    // Short vibrate
-    vibrate(50);
   } catch (e) {
     console.warn('Could not play solve sound:', e);
   }
