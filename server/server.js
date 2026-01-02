@@ -16,7 +16,12 @@ const server = createServer(app);
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://multiwordle-psi.vercel.app',
+      'https://wordle.casinore.io'
+    ];
 
 const io = new Server(server, {
   cors: {
