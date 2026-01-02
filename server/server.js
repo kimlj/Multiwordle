@@ -51,11 +51,57 @@ app.get('/api/analytics', (req, res) => {
   }
 });
 
+// Server status endpoint - check active rooms and maintenance mode
+app.get('/api/status', (req, res) => {
+  const rooms = gameManager.getAllRooms();
+  const activeRooms = rooms.filter(r => r.state === 'playing').length;
+  const lobbyRooms = rooms.filter(r => r.state === 'lobby').length;
+  const totalPlayers = rooms.reduce((sum, r) => sum + r.players.size, 0);
+
+  res.json({
+    maintenance: maintenanceMode,
+    activeRooms,
+    lobbyRooms,
+    totalRooms: rooms.length,
+    totalPlayers,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Maintenance mode toggle endpoint
+app.post('/api/maintenance', (req, res) => {
+  const secret = req.query.secret || req.body.secret;
+
+  if (secret !== MAINTENANCE_SECRET) {
+    return res.status(401).json({ error: 'Invalid secret' });
+  }
+
+  const enable = req.query.enable !== 'false' && req.body.enable !== false;
+  maintenanceMode = enable;
+
+  const rooms = gameManager.getAllRooms();
+  const activeRooms = rooms.filter(r => r.state === 'playing').length;
+
+  console.log(`Maintenance mode ${maintenanceMode ? 'ENABLED' : 'DISABLED'}. Active games: ${activeRooms}`);
+
+  res.json({
+    maintenance: maintenanceMode,
+    activeRooms,
+    message: maintenanceMode
+      ? `Maintenance enabled. ${activeRooms} games still in progress.`
+      : 'Maintenance disabled. New rooms can be created.'
+  });
+});
+
 // Only serve static files if they exist (for combined deployment)
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 const gameManager = new GameManager();
 const playerRooms = new Map(); // playerId -> roomCode
+
+// Maintenance mode - blocks new room creation for graceful deploys
+let maintenanceMode = false;
+const MAINTENANCE_SECRET = process.env.MAINTENANCE_SECRET || 'changeme123';
 
 // Store pending sabotages awaiting mirror shield response
 // Map: targetPlayerId -> { attackerId, itemId, item, roomCode, timestamp, bounceCount }
@@ -571,6 +617,12 @@ io.on('connection', (socket) => {
 
   // Create a new room
   socket.on('createRoom', ({ playerName, settings, persistentId }, callback) => {
+    // Block room creation during maintenance
+    if (maintenanceMode) {
+      callback({ success: false, error: 'Server is updating. Please try again in a few minutes.' });
+      return;
+    }
+
     const room = gameManager.createRoom(socket.id, playerName, settings);
     // Store persistentId on the player and track original host
     const player = room.players.get(socket.id);

@@ -1238,7 +1238,11 @@ export class GameManager {
   deleteRoom(roomCode) {
     this.rooms.delete(roomCode);
   }
-  
+
+  getAllRooms() {
+    return Array.from(this.rooms.values());
+  }
+
   cleanupEmptyRooms() {
     for (const [code, room] of this.rooms) {
       if (room.players.size === 0) {
