@@ -956,11 +956,11 @@ export default function GameScreen({ showResults = false }) {
           {solveNotifications.map((notif) => (
             <div
               key={notif.id}
-              className="animate-slide-in-right bg-wordle-green/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm flex items-center gap-2 shadow-lg"
+              className="animate-slide-in-right bg-wordle-yellow/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm flex items-center gap-2 shadow-lg"
             >
               <span className="text-base">✓</span>
-              <span className="text-white font-medium">{notif.playerName}</span>
-              <span className="text-white/80">in {notif.guesses}</span>
+              <span className="text-black/80 font-medium">{notif.playerName}</span>
+              <span className="text-black/60">in {notif.guesses}</span>
             </div>
           ))}
         </div>
