@@ -1109,7 +1109,7 @@ export default function GameScreen({ showResults = false }) {
       {/* Leave Confirmation Modal */}
       {showLeaveConfirm && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="glass rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full animate-bounce-in text-center">
             <div className="text-4xl mb-3">🚪</div>
             <h3 className="text-xl font-bold mb-2">Leave Game?</h3>
             <p className="text-white/70 mb-4">
