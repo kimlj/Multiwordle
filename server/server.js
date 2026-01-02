@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getRandomRoundDrops, getSabotageDuration } from './game.js';
 import { isValidWord, getRandomWord } from './words.js';
+import { logGame, getAnalytics } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +33,17 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Analytics API endpoint
+app.get('/api/analytics', (req, res) => {
+  try {
+    const analytics = getAnalytics();
+    res.json(analytics);
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
 });
 
 // Only serve static files if they exist (for combined deployment)
@@ -463,6 +475,47 @@ function endGame(roomCode) {
   if (!room) return;
 
   const finalResults = room.endGame();
+
+  // Log game to analytics database
+  try {
+    const hostPlayer = room.players.get(room.hostId);
+    const winnerName = finalResults.standings[0]?.name || null;
+
+    // Build rounds data for logging
+    const roundsData = room.roundScores.map((roundScore, index) => {
+      const playerData = [];
+      for (const [playerId, scoreData] of Object.entries(roundScore.scores)) {
+        const player = room.players.get(playerId);
+        const guesses = player?.guesses || [];
+        playerData.push({
+          name: scoreData.name,
+          opener: guesses[0] || null,
+          guesses: guesses,
+          solved: scoreData.solved,
+          score: scoreData.score
+        });
+      }
+      return {
+        roundInGame: index + 1,
+        targetWord: roundScore.word,
+        playerData
+      };
+    });
+
+    logGame({
+      code: room.roomCode,
+      numPlayers: room.players.size,
+      mode: room.settings.gameMode,
+      settings: room.settings,
+      hostName: hostPlayer?.name || 'Unknown',
+      winnerName,
+      numRounds: room.roundScores.length,
+      roundsData
+    });
+  } catch (error) {
+    console.error('Failed to log game to analytics:', error);
+  }
+
   io.to(roomCode).emit('gameEnd', {
     ...finalResults,
     gameState: room.getPublicState()
@@ -883,6 +936,56 @@ io.on('connection', (socket) => {
       message: sanitizedMessage,
       timestamp: Date.now()
     });
+  });
+
+  // Nudge player to get ready (host only)
+  socket.on('nudgePlayer', ({ targetPlayerId }, callback) => {
+    const roomCode = playerRooms.get(socket.id);
+    if (!roomCode) {
+      if (callback) callback({ success: false, error: 'Not in a room' });
+      return;
+    }
+
+    const room = gameManager.getRoom(roomCode);
+    if (!room) {
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    // Only host can nudge
+    if (room.hostId !== socket.id) {
+      if (callback) callback({ success: false, error: 'Only the host can nudge players' });
+      return;
+    }
+
+    // Can't nudge yourself
+    if (targetPlayerId === socket.id) {
+      if (callback) callback({ success: false, error: 'Cannot nudge yourself' });
+      return;
+    }
+
+    const targetPlayer = room.players.get(targetPlayerId);
+    if (!targetPlayer) {
+      if (callback) callback({ success: false, error: 'Player not found' });
+      return;
+    }
+
+    // Only nudge players who are not ready
+    if (targetPlayer.ready) {
+      if (callback) callback({ success: false, error: 'Player is already ready' });
+      return;
+    }
+
+    // Send nudge to target player
+    const targetSocket = io.sockets.sockets.get(targetPlayerId);
+    if (targetSocket) {
+      const hostPlayer = room.players.get(socket.id);
+      targetSocket.emit('nudgeToReady', {
+        fromPlayer: hostPlayer?.name || 'Host'
+      });
+    }
+
+    if (callback) callback({ success: true });
   });
 
   // Toggle ready status
@@ -1992,7 +2095,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Serve React app for all other routes
+// Serve React app for all other routes (including /analytics)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });

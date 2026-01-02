@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from './lib/store';
 import { useSocket } from './hooks/useSocket';
 import HomeScreen from './components/HomeScreen';
@@ -7,8 +7,32 @@ import GameScreen from './components/GameScreen';
 import ResultsScreen from './components/ResultsScreen';
 import CountdownOverlay from './components/CountdownOverlay';
 import Toast from './components/Toast';
+import AnalyticsPage from './components/AnalyticsPage';
 
-function App() {
+// Check if we're on the /analytics route (checked before hooks)
+function isAnalyticsPath() {
+  const path = window.location.pathname;
+  return path === '/analytics' || path === '/analytics/';
+}
+
+// Wrapper component that handles routing
+function AppRouter() {
+  const [isAnalyticsRoute, setIsAnalyticsRoute] = useState(isAnalyticsPath);
+
+  useEffect(() => {
+    const checkRoute = () => setIsAnalyticsRoute(isAnalyticsPath());
+    window.addEventListener('popstate', checkRoute);
+    return () => window.removeEventListener('popstate', checkRoute);
+  }, []);
+
+  if (isAnalyticsRoute) {
+    return <AnalyticsPage />;
+  }
+
+  return <GameApp />;
+}
+
+function GameApp() {
   const { gameState, showCountdown, toast, isReconnecting, connected, playerId } = useGameStore();
   useSocket(); // Initialize socket connection
 
@@ -82,4 +106,4 @@ function App() {
   );
 }
 
-export default App;
+export default AppRouter;

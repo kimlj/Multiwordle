@@ -387,6 +387,16 @@ export function useSocket() {
         showToast(`${playerName} joined the game!`, 2000);
       });
 
+      // Nudge notification - when host nudges you to get ready
+      socket.on('nudgeToReady', ({ fromPlayer }) => {
+        useGameStore.getState().setNudgeNotification(true);
+        showToast(`${fromPlayer} wants you to get ready!`, 3000);
+        // Auto-clear nudge animation after 2 seconds
+        setTimeout(() => {
+          useGameStore.getState().setNudgeNotification(false);
+        }, 2000);
+      });
+
       socket.on('playerLeft', ({ gameState, newHostId }) => {
         setGameState(gameState);
         if (socket.id === newHostId) {
@@ -681,6 +691,18 @@ export function useSocket() {
     });
   }, []);
 
+  const nudgePlayer = useCallback((targetPlayerId) => {
+    return new Promise((resolve, reject) => {
+      socket.emit('nudgePlayer', { targetPlayerId }, (response) => {
+        if (response?.success) {
+          resolve(response);
+        } else {
+          reject(new Error(response?.error || 'Failed to nudge player'));
+        }
+      });
+    });
+  }, []);
+
   return {
     socket,
     createRoom,
@@ -700,6 +722,7 @@ export function useSocket() {
     letterSnipe,
     debugGiveAllItems,
     activateSecondChance,
-    respondMirrorShield
+    respondMirrorShield,
+    nudgePlayer
   };
 }

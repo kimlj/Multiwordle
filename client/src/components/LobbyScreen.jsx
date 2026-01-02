@@ -6,11 +6,11 @@ import DevFooter from './DevFooter';
 import LobbyChat from './LobbyChat';
 
 export default function LobbyScreen({ waitingForOthers = false }) {
-  const { gameState, playerId, roomCode, showToast } = useGameStore();
+  const { gameState, playerId, roomCode, showToast, nudgeNotification } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
   const isHost = gameState?.hostId === playerId;
-  const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom, socket } = useSocket();
+  const { toggleReady, updateSettings, startGame, updateName, kickPlayer, leaveRoom, socket, nudgePlayer } = useSocket();
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [customWords, setCustomWords] = useState([]);
@@ -19,6 +19,23 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   const [shared, setShared] = useState(false);
   const [wordError, setWordError] = useState('');
   const [showInfo, setShowInfo] = useState(false);
+  const [recentlyNudged, setRecentlyNudged] = useState({}); // { playerId: timestamp } - prevent spam
+
+  const handleNudgePlayer = async (targetPlayerId) => {
+    // Check cooldown (3 seconds per player)
+    const lastNudge = recentlyNudged[targetPlayerId];
+    if (lastNudge && Date.now() - lastNudge < 3000) {
+      return; // Still on cooldown
+    }
+
+    try {
+      await nudgePlayer(targetPlayerId);
+      setRecentlyNudged(prev => ({ ...prev, [targetPlayerId]: Date.now() }));
+      showToast('Nudge sent!', 1500);
+    } catch (err) {
+      showToast(err.message, 2000);
+    }
+  };
 
   if (!gameState) return null;
 
@@ -257,9 +274,19 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     <div className="flex items-center gap-1.5 shrink-0">
                       {/* Host doesn't participate in ready system */}
                       {player.id !== gameState.hostId && (
-                        <span className={`text-xs font-bold ${player.ready ? 'text-wordle-green' : 'text-white/30'}`}>
-                          {player.ready ? '✓' : '○'}
-                        </span>
+                        player.ready ? (
+                          <span className="text-xs font-bold text-wordle-green">✓</span>
+                        ) : (
+                          <button
+                            onClick={() => handleNudgePlayer(player.id)}
+                            className="p-1 text-wordle-yellow/70 hover:text-wordle-yellow hover:bg-wordle-yellow/10 rounded transition-all group"
+                            title="Nudge to get ready"
+                          >
+                            <svg className="w-4 h-4 group-hover:animate-wiggle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                          </button>
+                        )
                       )}
                       {player.id !== playerId && (
                         <button
@@ -642,12 +669,26 @@ export default function LobbyScreen({ waitingForOthers = false }) {
 
               {/* Ready Button - pinned at bottom */}
               <div className="shrink-0 pt-4 mt-auto border-t border-white/10">
+                {/* Nudge notification banner */}
+                {nudgeNotification && !currentPlayer?.ready && (
+                  <div className="mb-3 p-3 bg-wordle-yellow/20 border border-wordle-yellow/50 rounded-xl animate-nudge-pulse">
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5 text-wordle-yellow animate-wiggle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                      <span className="text-wordle-yellow font-bold text-sm">Host is waiting for you!</span>
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={toggleReady}
                   className={`w-full py-3 rounded-xl font-bold transition-all ${
                     currentPlayer?.ready
                       ? 'bg-white/10 text-white/60 hover:bg-white/20'
-                      : 'bg-wordle-green text-white hover:bg-wordle-green/90'
+                      : nudgeNotification
+                        ? 'bg-wordle-yellow text-black hover:bg-wordle-yellow/90 animate-nudge-pulse'
+                        : 'bg-wordle-green text-white hover:bg-wordle-green/90'
                   }`}
                 >
                   {currentPlayer?.ready ? 'Cancel Ready' : "I'm Ready!"}

@@ -25,6 +25,8 @@ export default {
         'bounce-in': 'bounceIn 0.5s ease-out',
         'pulse-glow': 'pulseGlow 2s infinite',
         'slide-up': 'slideUp 0.3s ease-out',
+        'wiggle': 'wiggle 0.3s ease-in-out',
+        'nudge-pulse': 'nudgePulse 0.5s ease-in-out infinite',
       },
       keyframes: {
         flip: {
@@ -54,6 +56,16 @@ export default {
         slideUp: {
           '0%': { transform: 'translateY(20px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        wiggle: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(-10deg)' },
+          '50%': { transform: 'rotate(10deg)' },
+          '75%': { transform: 'rotate(-5deg)' },
+        },
+        nudgePulse: {
+          '0%, 100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(201, 180, 88, 0.4)' },
+          '50%': { transform: 'scale(1.02)', boxShadow: '0 0 20px 5px rgba(201, 180, 88, 0.6)' },
         },
       },
     },

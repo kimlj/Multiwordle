@@ -41,6 +41,7 @@ export const useGameStore = create((set, get) => ({
   xrayBoards: null, // { playerId: { name, guesses, results, solved } } - X-Ray Vision data
   showSecondChancePrompt: false, // Show prompt to activate Second Chance after 6 guesses
   mirrorShieldPrompt: null, // { attacker, item, isCounterReflect } - Show prompt when sabotaged with mirror shield
+  nudgeNotification: false, // Show nudge animation when host nudges you
 
   // Timers
   roundTimeRemaining: 0,
@@ -164,6 +165,7 @@ export const useGameStore = create((set, get) => ({
   setXrayBoards: (boards) => set({ xrayBoards: boards }),
   setShowSecondChancePrompt: (show) => set({ showSecondChancePrompt: show }),
   setMirrorShieldPrompt: (prompt) => set({ mirrorShieldPrompt: prompt }),
+  setNudgeNotification: (show) => set({ nudgeNotification: show }),
   addActiveEffect: ({ effect, duration, data }) => {
     const expiresAt = Date.now() + duration;
     set((state) => ({
@@ -213,7 +215,8 @@ export const useGameStore = create((set, get) => ({
     xrayBoards: null,
     countdownItemRound: null,
     showSecondChancePrompt: false,
-    mirrorShieldPrompt: null
+    mirrorShieldPrompt: null,
+    nudgeNotification: false
   }),
   
   // Full reset
@@ -240,6 +243,7 @@ export const useGameStore = create((set, get) => ({
     itemEarningNotifications: [],
     xrayBoards: null,
     showSecondChancePrompt: false,
-    mirrorShieldPrompt: null
+    mirrorShieldPrompt: null,
+    nudgeNotification: false
   })
 }));
