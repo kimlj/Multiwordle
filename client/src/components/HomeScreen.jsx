@@ -109,10 +109,10 @@ export default function HomeScreen() {
     try {
       await createRoom(playerName.trim(), settings);
     } catch (err) {
-      if (err.message.includes('updating')) {
+      if (err.message && err.message.includes('updating')) {
         setShowMaintenance(true);
       } else {
-        setError(err.message);
+        setError(err.message || 'Failed to create room');
       }
     }
     setLoading(false);
@@ -270,6 +270,25 @@ export default function HomeScreen() {
             </form>
           </div>
         </div>
+
+        {/* Maintenance Modal */}
+        {showMaintenance && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="glass rounded-2xl p-8 max-w-sm w-full text-center animate-slide-up">
+              <div className="text-5xl mb-4">🔧</div>
+              <h3 className="font-display text-2xl font-bold mb-2">Quick Update</h3>
+              <p className="text-white/60 mb-6">
+                We're making the game even better! Please try again in a moment.
+              </p>
+              <button
+                onClick={() => setShowMaintenance(false)}
+                className="btn-primary w-full"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
