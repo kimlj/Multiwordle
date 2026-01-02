@@ -42,6 +42,7 @@ export const useGameStore = create((set, get) => ({
   showSecondChancePrompt: false, // Show prompt to activate Second Chance after 6 guesses
   mirrorShieldPrompt: null, // { attacker, item, isCounterReflect } - Show prompt when sabotaged with mirror shield
   nudgeNotification: false, // Show nudge animation when host nudges you
+  solveNotifications: [], // [{ id, playerName, guesses }] - slide-in notifications from right
 
   // Timers
   roundTimeRemaining: 0,
@@ -132,6 +133,18 @@ export const useGameStore = create((set, get) => ({
   showToast: (message, duration = 2000) => {
     set({ toast: message });
     setTimeout(() => set({ toast: null }), duration);
+  },
+
+  addSolveNotification: (playerName, guesses) => {
+    const id = Date.now();
+    set((state) => ({
+      solveNotifications: [...state.solveNotifications, { id, playerName, guesses }]
+    }));
+    setTimeout(() => {
+      set((state) => ({
+        solveNotifications: state.solveNotifications.filter(n => n.id !== id)
+      }));
+    }, 3000);
   },
   
   setShowCountdown: (show) => set({ showCountdown: show }),

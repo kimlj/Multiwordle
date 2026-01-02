@@ -190,7 +190,7 @@ export function useSocket() {
         setGameState(gameState);
         const player = gameState.players[playerId];
         if (player && solved) {
-          showToast(`${player.name} solved it in ${guessNumber} guesses!`, 2000);
+          useGameStore.getState().addSolveNotification(player.name, guessNumber);
         }
       });
 

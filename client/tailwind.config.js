@@ -27,6 +27,7 @@ export default {
         'slide-up': 'slideUp 0.3s ease-out',
         'wiggle': 'wiggle 0.3s ease-in-out',
         'nudge-pulse': 'nudgePulse 0.5s ease-in-out infinite',
+        'slide-in-right': 'slideInRight 0.3s ease-out forwards',
       },
       keyframes: {
         flip: {
@@ -66,6 +67,10 @@ export default {
         nudgePulse: {
           '0%, 100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(201, 180, 88, 0.4)' },
           '50%': { transform: 'scale(1.02)', boxShadow: '0 0 20px 5px rgba(201, 180, 88, 0.6)' },
+        },
+        slideInRight: {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
         },
       },
     },

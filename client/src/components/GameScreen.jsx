@@ -61,7 +61,8 @@ export default function GameScreen({ showResults = false }) {
     setShowSecondChancePrompt,
     mirrorShieldPrompt,
     setMirrorShieldPrompt,
-    setItemNotification
+    setItemNotification,
+    solveNotifications
   } = useGameStore();
 
   // Derive isHost from gameState to prevent sync issues
@@ -946,6 +947,22 @@ export default function GameScreen({ showResults = false }) {
           <div className={letterSnipeResult.isInWord ? 'text-white' : 'text-white/60'}>
             {letterSnipeResult.isInWord ? 'IS in the word!' : 'NOT in the word'}
           </div>
+        </div>
+      )}
+
+      {/* Solve Notifications - Slide in from right */}
+      {solveNotifications.length > 0 && (
+        <div className="fixed right-2 top-16 flex flex-col gap-2 z-40 pointer-events-none">
+          {solveNotifications.map((notif) => (
+            <div
+              key={notif.id}
+              className="animate-slide-in-right bg-wordle-green/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm flex items-center gap-2 shadow-lg"
+            >
+              <span className="text-base">✓</span>
+              <span className="text-white font-medium">{notif.playerName}</span>
+              <span className="text-white/80">in {notif.guesses}</span>
+            </div>
+          ))}
         </div>
       )}
 

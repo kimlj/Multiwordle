@@ -1504,11 +1504,9 @@ io.on('connection', (socket) => {
       message: 'Second Chance activated! You have one more guess.'
     });
 
-    // Broadcast to all players
-    io.to(roomCode).emit('itemUsed', {
-      fromPlayer: socket.id,
-      item: { id: 'second_chance', name: 'Second Chance', emoji: '🔁', type: 'powerup' },
-      targetPlayer: null
+    // Notify only the user who used the item
+    socket.emit('itemUsed', {
+      item: { id: 'second_chance', name: 'Second Chance', emoji: '🔁', type: 'powerup' }
     });
 
     io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
@@ -1685,11 +1683,9 @@ io.on('connection', (socket) => {
       isInWord: result.isInWord
     });
 
-    // Notify all players
-    io.to(roomCode).emit('itemUsed', {
-      fromPlayer: socket.id,
-      item: { id: 'letter_snipe', name: 'Letter Snipe', emoji: '🎯', type: 'powerup' },
-      targetPlayer: null
+    // Notify only the user who used the item
+    socket.emit('itemUsed', {
+      item: { id: 'letter_snipe', name: 'Letter Snipe', emoji: '🎯', type: 'powerup' }
     });
 
     io.to(roomCode).emit('gameStateUpdate', room.getPublicState());
