@@ -273,8 +273,8 @@ export default function HomeScreen() {
 
         {/* Maintenance Modal */}
         {showMaintenance && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="glass rounded-2xl p-8 max-w-sm w-full text-center animate-slide-up">
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-900 border border-white/10 rounded-2xl p-8 max-w-sm w-full text-center animate-slide-up">
               <div className="text-5xl mb-4">🔧</div>
               <h3 className="font-display text-2xl font-bold mb-2">Quick Update</h3>
               <p className="text-white/60 mb-6">
@@ -464,8 +464,8 @@ export default function HomeScreen() {
 
       {/* Maintenance Modal */}
       {showMaintenance && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass rounded-2xl p-8 max-w-sm w-full text-center animate-slide-up">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-8 max-w-sm w-full text-center animate-slide-up">
             <div className="text-5xl mb-4">🔧</div>
             <h3 className="font-display text-2xl font-bold mb-2">Quick Update</h3>
             <p className="text-white/60 mb-6">
