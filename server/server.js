@@ -4,9 +4,9 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getRandomRoundDrops, getSabotageDuration } from './game.js';
+import { GameManager, ITEMS, CHALLENGES, RARE_LETTERS, getRandomDrop, getRandomRoundDrops, getSabotageDuration, evaluateGuess, countColors, calculateScore } from './game.js';
 import { isValidWord, getRandomWord } from './words.js';
-import { logGame, getAnalytics } from './database.js';
+import { logGame, getAnalytics, getPlayerStats, getGameFullDetails } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +48,42 @@ app.get('/api/analytics', (req, res) => {
   } catch (error) {
     console.error('Analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// Player stats API endpoint
+app.get('/api/player/:name', (req, res) => {
+  try {
+    const playerName = decodeURIComponent(req.params.name);
+    const stats = getPlayerStats(playerName);
+    if (!stats) {
+      res.status(404).json({ error: 'Player not found' });
+      return;
+    }
+    res.json(stats);
+  } catch (error) {
+    console.error('Player stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch player stats' });
+  }
+});
+
+// Game details API endpoint
+app.get('/api/game/:id', (req, res) => {
+  try {
+    const gameId = parseInt(req.params.id);
+    if (isNaN(gameId)) {
+      res.status(400).json({ error: 'Invalid game ID' });
+      return;
+    }
+    const game = getGameFullDetails(gameId);
+    if (!game) {
+      res.status(404).json({ error: 'Game not found' });
+      return;
+    }
+    res.json(game);
+  } catch (error) {
+    console.error('Game details error:', error);
+    res.status(500).json({ error: 'Failed to fetch game details' });
   }
 });
 
@@ -791,6 +827,10 @@ io.on('connection', (socket) => {
         playerData.solvedAt = null;
         playerData.solvedInGuesses = 0;
         playerData.returnedToLobby = false;
+        // Reset battle royale elimination status from previous game
+        playerData.eliminated = false;
+        playerData.eliminatedRound = null;
+        playerData.placement = null;
         // Host doesn't participate in ready system
         playerData.ready = false;
       }
@@ -810,6 +850,24 @@ io.on('connection', (socket) => {
           // Player is rejoining a different round - reset their round-specific data
           // BUT keep totalScore - it persists across rounds!
           console.log(`Resetting round data for ${playerName}: was round ${savedRound}, now round ${room.currentRound} (keeping totalScore: ${playerData.totalScore})`);
+
+          // BATTLE ROYALE: If player disconnected during a round without answering,
+          // they should be auto-eliminated since they had 0 score
+          if (room.settings.gameMode === 'battleRoyale' && savedRound !== undefined && savedRound > 0) {
+            const hadNoGuesses = !disconnectedPlayer.playerData.guesses || disconnectedPlayer.playerData.guesses.length === 0;
+            const wasNotSolved = !disconnectedPlayer.playerData.solved;
+            const wasNotEliminated = !playerData.eliminated;
+
+            if (hadNoGuesses && wasNotSolved && wasNotEliminated) {
+              // Player disconnected without answering - they should be eliminated
+              console.log(`Eliminating ${playerName} for disconnecting without answering in round ${savedRound}`);
+              playerData.eliminated = true;
+              playerData.eliminatedRound = savedRound;
+              // Calculate placement based on when they were eliminated
+              playerData.placement = room.players.size + 1; // Worst placement
+            }
+          }
+
           playerData.guesses = [];
           playerData.results = [];
           playerData.solved = false;
@@ -834,6 +892,41 @@ io.on('connection', (socket) => {
       socket.join(roomCode);
       disconnectedPlayers.delete(disconnectKey);
 
+      // MIRROR MATCH: If player reconnects during a round with mirrorMatch enabled,
+      // and they don't have the mirror opener yet, apply it
+      const restoredPlayer = room.players.get(socket.id);
+      let mirrorOpenerData = null;
+      if (room.state === 'playing' && room.settings.mirrorMatch && room.mirrorOpener && !restoredPlayer.eliminated) {
+        // Check if player is missing the mirror opener (should be their first guess)
+        if (restoredPlayer.guesses.length === 0 || restoredPlayer.guesses[0] !== room.mirrorOpener) {
+          // Apply mirror opener to this player
+          const result = evaluateGuess(room.mirrorOpener, room.targetWord);
+          restoredPlayer.guesses = [room.mirrorOpener];
+          restoredPlayer.results = [result];
+
+          // Check if opener solved it (unlikely but possible)
+          const colors = countColors(result);
+          if (colors.green === 5) {
+            restoredPlayer.solved = true;
+            restoredPlayer.solvedAt = Date.now();
+            restoredPlayer.solvedInGuesses = 1;
+            const remainingTime = (room.settings.roundTimeSeconds * 1000) - (restoredPlayer.solvedAt - room.roundStartTime);
+            restoredPlayer.roundScore = calculateScore(1, remainingTime, room.settings.roundTimeSeconds * 1000);
+            restoredPlayer.totalScore += restoredPlayer.roundScore;
+          }
+
+          mirrorOpenerData = {
+            opener: room.mirrorOpener,
+            results: [{
+              playerId: socket.id,
+              result,
+              colors
+            }]
+          };
+          console.log(`Applied mirror opener ${room.mirrorOpener} to reconnecting player ${playerName}`);
+        }
+      }
+
       // Notify others
       socket.to(roomCode).emit('playerJoined', {
         playerId: socket.id,
@@ -841,13 +934,13 @@ io.on('connection', (socket) => {
         gameState: room.getPublicState()
       });
 
-      const restoredPlayer = room.players.get(socket.id);
       callback({
         success: true,
         roomCode,
         playerId: socket.id,
         gameState: room.getPublicState(),
-        playerState: room.getPlayerState(socket.id)
+        playerState: room.getPlayerState(socket.id),
+        mirrorOpener: mirrorOpenerData
       });
 
       // Send inventory update to restore items on client
@@ -891,12 +984,21 @@ io.on('connection', (socket) => {
       // Host doesn't participate in ready system
       const playerReady = existingPlayer.ready;
 
+      // If room is in lobby state, reset elimination status from previous game
+      let playerDataToSet = { ...existingPlayer, id: socket.id, ready: playerReady };
+      if (room.state === 'lobby') {
+        playerDataToSet.eliminated = false;
+        playerDataToSet.eliminatedRound = null;
+        playerDataToSet.placement = null;
+        playerDataToSet.totalScore = 0;
+        playerDataToSet.roundScore = 0;
+        playerDataToSet.guesses = [];
+        playerDataToSet.results = [];
+        playerDataToSet.solved = false;
+      }
+
       // Add player back with new socket id
-      room.players.set(socket.id, {
-        ...existingPlayer,
-        id: socket.id,
-        ready: playerReady
-      });
+      room.players.set(socket.id, playerDataToSet);
 
       playerRooms.set(socket.id, roomCode);
       socket.join(roomCode);
@@ -1173,18 +1275,21 @@ io.on('connection', (socket) => {
         room.settings.customWord = word;
       }
 
-      // Battle Royale: auto-adjust rounds
+      // Battle Royale: auto-adjust rounds to ensure enough rounds for all eliminations
       if (room.settings.gameMode === 'battleRoyale') {
         const playerCount = room.players.size;
-        const minRounds = playerCount - 1; // Need at least (players - 1) rounds
+        const minRounds = Math.max(1, playerCount - 1); // Need at least (players - 1) rounds to have a winner
 
-        // If custom words provided, match rounds to custom words count
+        // If custom words provided, use custom words count but ensure minimum rounds
         if (room.settings.customWords && room.settings.customWords.length > 0) {
-          room.settings.rounds = room.settings.customWords.length;
+          // Use custom words count, but pad with random words if not enough
+          room.settings.rounds = Math.max(room.settings.customWords.length, minRounds);
         } else {
-          // Random words: use player count - 1 as safe default
-          room.settings.rounds = minRounds;
+          // Random words: ensure at least minRounds
+          room.settings.rounds = Math.max(room.settings.rounds, minRounds);
         }
+
+        console.log(`Battle Royale: ${playerCount} players, ${room.settings.rounds} rounds (min needed: ${minRounds})`);
       }
 
       // Initialize Item Rounds (randomly selected for this game)

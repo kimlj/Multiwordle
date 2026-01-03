@@ -126,12 +126,8 @@ export function useSocket() {
               setGameState(response.gameState);
               // Update isHost based on server's hostId
               setIsHost(response.gameState?.hostId === response.playerId);
-              if (response.playerState) {
-                setPlayerState(response.playerState);
-              }
+
               // Reset client-side state to match server state
-              // This ensures no stale keyboard colors or input from previous round
-              useGameStore.getState().resetKeyboardStatus();
               useGameStore.getState().clearInput();
               useGameStore.setState({
                 revealedLetters: {},
@@ -139,6 +135,18 @@ export function useSocket() {
                 letterSnipeResult: null,
                 xrayBoards: null
               });
+
+              // IMPORTANT: Set playerState AFTER resetting keyboard
+              // setPlayerState rebuilds keyboard colors from the player's guesses
+              if (response.playerState) {
+                // First reset keyboard, then rebuild from playerState
+                useGameStore.getState().resetKeyboardStatus();
+                setPlayerState(response.playerState);
+              } else {
+                // No player state, just reset keyboard
+                useGameStore.getState().resetKeyboardStatus();
+              }
+
               showToast('Reconnected to game!', 2000);
             } else {
               // Room no longer exists or can't rejoin

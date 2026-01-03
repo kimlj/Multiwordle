@@ -32,6 +32,16 @@ export default function AnalyticsPage() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [mergeTarget, setMergeTarget] = useState('');
 
+  // Player details modal
+  const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [playerDetails, setPlayerDetails] = useState(null);
+  const [loadingPlayer, setLoadingPlayer] = useState(false);
+
+  // Game details modal
+  const [showGameModal, setShowGameModal] = useState(false);
+  const [gameDetails, setGameDetails] = useState(null);
+  const [loadingGame, setLoadingGame] = useState(false);
+
   useEffect(() => {
     fetchAnalytics();
   }, []);
@@ -47,6 +57,38 @@ export default function AnalyticsPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPlayerDetails = async (playerName) => {
+    try {
+      setLoadingPlayer(true);
+      setShowPlayerModal(true);
+      const response = await fetch(`${API_URL}/api/player/${encodeURIComponent(playerName)}`);
+      if (!response.ok) throw new Error('Player not found');
+      const data = await response.json();
+      setPlayerDetails(data);
+    } catch (err) {
+      console.error('Failed to fetch player details:', err);
+      setPlayerDetails(null);
+    } finally {
+      setLoadingPlayer(false);
+    }
+  };
+
+  const fetchGameDetails = async (gameId) => {
+    try {
+      setLoadingGame(true);
+      setShowGameModal(true);
+      const response = await fetch(`${API_URL}/api/game/${gameId}`);
+      if (!response.ok) throw new Error('Game not found');
+      const data = await response.json();
+      setGameDetails(data);
+    } catch (err) {
+      console.error('Failed to fetch game details:', err);
+      setGameDetails(null);
+    } finally {
+      setLoadingGame(false);
     }
   };
 
@@ -442,7 +484,7 @@ export default function AnalyticsPage() {
                   </span>
                 )}
               </div>
-              <p className="text-white/30 text-xs mb-3">Click a player name to merge aliases</p>
+              <p className="text-white/30 text-xs mb-3">Click a player to view stats • Long-press to merge aliases</p>
               <div>
                 <table className="w-full text-sm">
                   <thead>
@@ -465,22 +507,21 @@ export default function AnalyticsPage() {
                       const uniqueAliases = [...new Set(playerAliases)];
 
                       return (
-                        <tr key={player.player_name} className="hover:bg-white/5 transition-colors">
+                        <tr key={player.player_name} className="hover:bg-white/5 transition-colors cursor-pointer"
+                            onClick={() => fetchPlayerDetails(player.player_name)}
+                            onContextMenu={(e) => { e.preventDefault(); openAliasModal(player.player_name); }}>
                           <td className="py-2 pr-2">
                             {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-white/40">{i + 1}</span>}
                           </td>
                           <td className="py-2 pr-2">
-                            <button
-                              onClick={() => openAliasModal(player.player_name)}
-                              className="text-left hover:text-wordle-green transition-colors"
-                            >
+                            <div className="text-left hover:text-wordle-green transition-colors">
                               <span className="font-medium">{player.player_name}</span>
                               {uniqueAliases.length > 0 && (
                                 <div className="text-xs text-white/30 mt-0.5 truncate max-w-[120px]">
                                   aka: {uniqueAliases.join(', ')}
                                 </div>
                               )}
-                            </button>
+                            </div>
                           </td>
                           <td className="py-2 pr-2 text-right text-white/70">{player.games_played}</td>
                           <td className="py-2 pr-2 text-right text-wordle-green">{player.wins}</td>
@@ -511,11 +552,16 @@ export default function AnalyticsPage() {
                 </svg>
                 <span>Recent Games</span>
               </h3>
+              <p className="text-white/30 text-xs mb-4">Click a game to view full standings</p>
               <div className="space-y-3 max-h-[500px] overflow-y-auto">
                 {recentGames?.map((game) => {
                   const settings = typeof game.settings === 'string' ? JSON.parse(game.settings) : game.settings;
                   return (
-                    <div key={game.id} className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition-colors">
+                    <div
+                      key={game.id}
+                      onClick={() => fetchGameDetails(game.id)}
+                      className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition-colors cursor-pointer"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{game.mode === 'battleRoyale' ? '⚔️' : '🏆'}</span>
@@ -577,6 +623,239 @@ export default function AnalyticsPage() {
           Analytics refresh automatically when you load this page
         </div>
       </div>
+
+      {/* Player Details Modal */}
+      {showPlayerModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4"
+          onClick={() => setShowPlayerModal(false)}
+        >
+          <div
+            className="glass-card p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto animate-bounce-in"
+            onClick={e => e.stopPropagation()}
+          >
+            {loadingPlayer ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4 animate-pulse">👤</div>
+                <p className="text-white/60">Loading player stats...</p>
+              </div>
+            ) : playerDetails ? (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-xl font-bold flex items-center gap-2">
+                    <span className="text-2xl">👤</span>
+                    <span>{playerDetails.player_name}</span>
+                  </h3>
+                  <button
+                    onClick={() => setShowPlayerModal(false)}
+                    className="text-white/40 hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-white">{playerDetails.games_played}</div>
+                    <div className="text-xs text-white/50">Games</div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-wordle-green">{playerDetails.classic_wins || 0}</div>
+                    <div className="text-xs text-white/50">🏆 Classic Wins</div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-red-400">{playerDetails.elimination_wins || 0}</div>
+                    <div className="text-xs text-white/50">⚔️ Elim Wins</div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-cyan-400">{playerDetails.words_guessed || 0}</div>
+                    <div className="text-xs text-white/50">Words Solved</div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-purple-400">{playerDetails.total_rounds || 0}</div>
+                    <div className="text-xs text-white/50">Rounds Played</div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-amber-400">{playerDetails.best_round_score || 0}</div>
+                    <div className="text-xs text-white/50">Best Score</div>
+                  </div>
+                </div>
+
+                {/* Favorite Opener */}
+                {playerDetails.favoriteOpener && (
+                  <div className="mb-4">
+                    <div className="text-xs text-white/50 mb-1">Favorite Opener</div>
+                    <div className="font-mono text-xl font-bold tracking-widest text-wordle-green">
+                      {playerDetails.favoriteOpener}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Guesses */}
+                {playerDetails.topGuesses?.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-xs text-white/50 mb-2">Most Used Words</div>
+                    <div className="flex flex-wrap gap-2">
+                      {playerDetails.topGuesses.slice(0, 5).map((g, i) => (
+                        <span key={g.guess} className="px-2 py-1 bg-white/10 rounded text-sm font-mono">
+                          {g.guess} <span className="text-white/40">({g.count})</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Games */}
+                {playerDetails.recentGames?.length > 0 && (
+                  <div>
+                    <div className="text-xs text-white/50 mb-2">Recent Games</div>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {playerDetails.recentGames.slice(0, 10).map(game => (
+                        <div
+                          key={game.id}
+                          onClick={() => { setShowPlayerModal(false); fetchGameDetails(game.id); }}
+                          className="bg-white/5 rounded-lg p-2 hover:bg-white/10 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span>{game.mode === 'battleRoyale' ? '⚔️' : '🏆'}</span>
+                              <span className="font-mono text-xs text-white/50">{game.code}</span>
+                              <span className="text-sm">#{game.game_number}</span>
+                            </div>
+                            {game.winner_name === playerDetails.player_name && (
+                              <span className="text-wordle-green text-xs">👑 Won</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-white/40 mt-1">
+                            {game.rounds.length} rounds • {game.rounds.reduce((sum, r) => sum + r.score, 0)} pts
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">❌</div>
+                <p className="text-white/60">Player not found</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Game Details Modal */}
+      {showGameModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] p-4"
+          onClick={() => setShowGameModal(false)}
+        >
+          <div
+            className="glass-card p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-bounce-in"
+            onClick={e => e.stopPropagation()}
+          >
+            {loadingGame ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4 animate-pulse">🎮</div>
+                <p className="text-white/60">Loading game details...</p>
+              </div>
+            ) : gameDetails ? (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-xl font-bold flex items-center gap-2">
+                    <span className="text-2xl">{gameDetails.mode === 'battleRoyale' ? '⚔️' : '🏆'}</span>
+                    <span>Game #{gameDetails.game_number}</span>
+                    <span className="font-mono text-sm text-white/50">({gameDetails.code})</span>
+                  </h3>
+                  <button
+                    onClick={() => setShowGameModal(false)}
+                    className="text-white/40 hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Game Info */}
+                <div className="flex flex-wrap gap-2 mb-4 text-sm text-white/60">
+                  <span>{gameDetails.num_rounds} rounds</span>
+                  <span>•</span>
+                  <span>{gameDetails.actual_players || gameDetails.num_players} players</span>
+                  <span>•</span>
+                  <span>Host: {gameDetails.host_name}</span>
+                </div>
+
+                {/* Standings */}
+                <div className="mb-6">
+                  <div className="text-xs text-white/50 mb-2">Final Standings</div>
+                  <div className="space-y-2">
+                    {gameDetails.standings?.map((player, i) => (
+                      <div
+                        key={player.player_name}
+                        onClick={() => { setShowGameModal(false); fetchPlayerDetails(player.player_name); }}
+                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                          i === 0 ? 'bg-wordle-green/20 border border-wordle-green/30' : 'bg-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-white/40 w-6 text-center">{i + 1}</span>}
+                          </span>
+                          <span className="font-medium">{player.player_name}</span>
+                          {i === 0 && <span className="text-xs text-wordle-green">👑</span>}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="text-white/50">{player.rounds_solved}/{player.rounds_played} solved</span>
+                          <span className="font-mono text-wordle-yellow font-bold">{player.total_score} pts</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Round by Round */}
+                {gameDetails.rounds?.length > 0 && (
+                  <div>
+                    <div className="text-xs text-white/50 mb-2">Round Details</div>
+                    <div className="space-y-3">
+                      {gameDetails.rounds.map(round => (
+                        <div key={round.round} className="bg-white/5 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold">Round {round.round}</span>
+                            <span className="font-mono text-wordle-green">{round.target_word}</span>
+                          </div>
+                          <div className="space-y-1">
+                            {round.players.map(p => (
+                              <div key={p.name} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className={p.solved ? 'text-wordle-green' : 'text-red-400'}>
+                                    {p.solved ? '✓' : '✗'}
+                                  </span>
+                                  <span className="text-white/70">{p.name}</span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs">
+                                  <span className="text-white/40 font-mono">{p.guesses.length} guesses</span>
+                                  <span className="font-mono text-wordle-yellow">{p.score} pts</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">❌</div>
+                <p className="text-white/60">Game not found</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Alias Modal */}
       {showAliasModal && selectedPlayer && (

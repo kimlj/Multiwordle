@@ -1,15 +1,60 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create database in the server directory
-const db = new Database(path.join(__dirname, 'analytics.db'));
+// Use persistent data directory in production, server directory in development
+const isProduction = process.env.NODE_ENV === 'production';
+const dataDir = isProduction ? path.join(__dirname, 'data') : __dirname;
+
+// Ensure data directory exists
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, 'analytics.db');
+console.log(`Database path: ${dbPath}`);
+
+const db = new Database(dbPath);
 
 // Enable WAL mode for better performance
 db.pragma('journal_mode = WAL');
+
+// Checkpoint WAL on startup to ensure data is persisted to main db file
+try {
+  db.pragma('wal_checkpoint(TRUNCATE)');
+  console.log('Database WAL checkpoint completed');
+} catch (e) {
+  console.warn('WAL checkpoint warning:', e.message);
+}
+
+// Handle graceful shutdown - checkpoint WAL before exit
+function closeDatabase() {
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    db.close();
+    console.log('Database closed gracefully');
+  } catch (e) {
+    console.warn('Database close warning:', e.message);
+  }
+}
+
+process.on('SIGINT', () => {
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('exit', () => {
+  closeDatabase();
+});
 
 // Initialize tables
 db.exec(`
@@ -130,6 +175,94 @@ const getTargetWords = db.prepare(`
   LIMIT 20
 `);
 
+// Get detailed stats for a specific player
+const getPlayerDetails = db.prepare(`
+  SELECT
+    player_name,
+    COUNT(*) as total_rounds,
+    SUM(CASE WHEN solved = 1 THEN 1 ELSE 0 END) as words_guessed,
+    SUM(score) as total_score,
+    ROUND(AVG(CASE WHEN solved = 1 THEN score ELSE NULL END), 0) as avg_score,
+    MAX(score) as best_round_score,
+    COUNT(DISTINCT game_id) as games_played
+  FROM player_guesses
+  WHERE LOWER(player_name) = LOWER(?)
+  GROUP BY LOWER(player_name)
+`);
+
+// Get games won by player (separated by mode)
+const getPlayerWins = db.prepare(`
+  SELECT
+    SUM(CASE WHEN mode = 'classic' THEN 1 ELSE 0 END) as classic_wins,
+    SUM(CASE WHEN mode = 'battleRoyale' THEN 1 ELSE 0 END) as elimination_wins
+  FROM games
+  WHERE LOWER(winner_name) = LOWER(?)
+`);
+
+const getPlayerFavoriteOpener = db.prepare(`
+  SELECT opener, COUNT(*) as count
+  FROM player_guesses
+  WHERE LOWER(player_name) = LOWER(?) AND opener IS NOT NULL AND opener != ''
+  GROUP BY UPPER(opener)
+  ORDER BY count DESC
+  LIMIT 1
+`);
+
+const getPlayerTopGuesses = db.prepare(`
+  SELECT UPPER(je.value) as guess, COUNT(*) as count
+  FROM player_guesses pg, json_each(pg.guesses) je
+  WHERE LOWER(pg.player_name) = LOWER(?) AND je.value IS NOT NULL AND je.value != ''
+  GROUP BY UPPER(je.value)
+  ORDER BY count DESC
+  LIMIT 10
+`);
+
+const getPlayerRecentGames = db.prepare(`
+  SELECT
+    g.id, g.game_number, g.code, g.mode, g.winner_name, g.created_at,
+    pg.round_in_game, pg.target_word, pg.guesses, pg.solved, pg.score
+  FROM player_guesses pg
+  JOIN games g ON pg.game_id = g.id
+  WHERE LOWER(pg.player_name) = LOWER(?)
+  ORDER BY g.id DESC, pg.round_in_game ASC
+  LIMIT 50
+`);
+
+// Get full standings for a specific game
+const getGameStandings = db.prepare(`
+  SELECT
+    pg.player_name,
+    SUM(pg.score) as total_score,
+    SUM(CASE WHEN pg.solved = 1 THEN 1 ELSE 0 END) as rounds_solved,
+    COUNT(*) as rounds_played,
+    GROUP_CONCAT(pg.score, ',') as round_scores
+  FROM player_guesses pg
+  WHERE pg.game_id = ?
+  GROUP BY pg.player_name
+  ORDER BY total_score DESC
+`);
+
+const getGameDetails = db.prepare(`
+  SELECT g.*,
+    (SELECT COUNT(DISTINCT player_name) FROM player_guesses WHERE game_id = g.id) as actual_players
+  FROM games g
+  WHERE g.id = ?
+`);
+
+const getGameRounds = db.prepare(`
+  SELECT
+    round_in_game,
+    target_word,
+    player_name,
+    opener,
+    guesses,
+    solved,
+    score
+  FROM player_guesses
+  WHERE game_id = ?
+  ORDER BY round_in_game, score DESC
+`);
+
 // Export functions
 export function logGame(gameData) {
   const {
@@ -204,6 +337,87 @@ export function getAnalytics() {
     recentGames,
     modeStats,
     targetWords
+  };
+}
+
+export function getPlayerStats(playerName) {
+  const details = getPlayerDetails.get(playerName);
+  if (!details) return null;
+
+  const winsResult = getPlayerWins.get(playerName);
+  const favoriteOpener = getPlayerFavoriteOpener.get(playerName);
+  const topGuesses = getPlayerTopGuesses.all(playerName);
+  const recentGames = getPlayerRecentGames.all(playerName);
+
+  // Add games won to details (separated by mode)
+  details.classic_wins = winsResult?.classic_wins || 0;
+  details.elimination_wins = winsResult?.elimination_wins || 0;
+
+  // Group recent games by game_id
+  const gamesMap = new Map();
+  for (const row of recentGames) {
+    if (!gamesMap.has(row.id)) {
+      gamesMap.set(row.id, {
+        id: row.id,
+        game_number: row.game_number,
+        code: row.code,
+        mode: row.mode,
+        winner_name: row.winner_name,
+        created_at: row.created_at,
+        rounds: []
+      });
+    }
+    gamesMap.get(row.id).rounds.push({
+      round: row.round_in_game,
+      target_word: row.target_word,
+      guesses: JSON.parse(row.guesses),
+      solved: row.solved === 1,
+      score: row.score
+    });
+  }
+
+  return {
+    ...details,
+    favoriteOpener: favoriteOpener?.opener || null,
+    topGuesses,
+    recentGames: Array.from(gamesMap.values())
+  };
+}
+
+export function getGameFullDetails(gameId) {
+  const game = getGameDetails.get(gameId);
+  if (!game) return null;
+
+  const standings = getGameStandings.all(gameId);
+  const roundsRaw = getGameRounds.all(gameId);
+
+  // Group rounds by round number
+  const roundsMap = new Map();
+  for (const row of roundsRaw) {
+    if (!roundsMap.has(row.round_in_game)) {
+      roundsMap.set(row.round_in_game, {
+        round: row.round_in_game,
+        target_word: row.target_word,
+        players: []
+      });
+    }
+    roundsMap.get(row.round_in_game).players.push({
+      name: row.player_name,
+      opener: row.opener,
+      guesses: JSON.parse(row.guesses),
+      solved: row.solved === 1,
+      score: row.score
+    });
+  }
+
+  return {
+    ...game,
+    settings: typeof game.settings === 'string' ? JSON.parse(game.settings) : game.settings,
+    standings: standings.map(s => ({
+      ...s,
+      round_scores: s.round_scores ? s.round_scores.split(',').map(Number) : []
+    })),
+    rounds: Array.from(roundsMap.values())
   };
 }
 

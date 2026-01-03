@@ -20,6 +20,9 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   const [wordError, setWordError] = useState('');
   const [showInfo, setShowInfo] = useState(false);
   const [recentlyNudged, setRecentlyNudged] = useState({}); // { playerId: timestamp } - prevent spam
+  const [customRoundsInput, setCustomRoundsInput] = useState(''); // For typing custom round numbers
+  const [isTypingRounds, setIsTypingRounds] = useState(false);
+  const [isStarting, setIsStarting] = useState(false); // Show loading state on start button
 
   const handleNudgePlayer = async (targetPlayerId) => {
     // Check cooldown (3 seconds per player)
@@ -115,7 +118,9 @@ export default function LobbyScreen({ waitingForOthers = false }) {
   };
 
   const handleStartWithWords = async () => {
+    if (isStarting) return;
     try {
+      setIsStarting(true);
       setWordError('');
       // Filter out empty words, keep only valid 5-letter words
       const validWords = customWords.filter(w => w.length === 5);
@@ -127,14 +132,18 @@ export default function LobbyScreen({ waitingForOthers = false }) {
     } catch (err) {
       setWordError(err.message);
       showToast(err.message);
+      setIsStarting(false);
     }
   };
 
   const handleStartGame = async () => {
+    if (isStarting) return;
     try {
+      setIsStarting(true);
       await startGame();
     } catch (err) {
       showToast(err.message);
+      setIsStarting(false);
     }
   };
 
@@ -339,23 +348,34 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                     {wordError && <p className="text-red-400 text-xs mb-2 text-center">{wordError}</p>}
                     <button
                       onClick={handleStartWithWords}
-                      className="w-full py-1.5 bg-wordle-yellow text-black rounded-lg font-bold text-sm"
+                      disabled={isStarting}
+                      className={`w-full py-1.5 rounded-lg font-bold text-sm transition-all ${
+                        isStarting
+                          ? 'bg-wordle-yellow/50 text-black/50 cursor-wait'
+                          : 'bg-wordle-yellow text-black'
+                      }`}
                     >
-                      {hasAnyCustomWord ? 'Start Custom' : 'Start'}
+                      {isStarting ? 'Starting...' : (hasAnyCustomWord ? 'Start Custom' : 'Start')}
                     </button>
                   </div>
                 )}
 
                 <button
                   onClick={handleStartGame}
-                  disabled={!allReady}
-                  className="w-full py-3 bg-wordle-green text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  disabled={!allReady || isStarting}
+                  className={`w-full py-3 rounded-xl font-bold transition-all ${
+                    isStarting
+                      ? 'bg-wordle-green/70 text-white/70 cursor-wait animate-pulse'
+                      : 'bg-wordle-green text-white disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
                 >
-                  {!allReady
-                    ? 'Waiting for players...'
-                    : waitingForOthers && playersStillViewing.length > 0
-                      ? `Start (${returnedPlayers.length} ready)`
-                      : 'Start Game!'}
+                  {isStarting
+                    ? 'Starting...'
+                    : !allReady
+                      ? 'Waiting for players...'
+                      : waitingForOthers && playersStillViewing.length > 0
+                        ? `Start (${returnedPlayers.length} ready)`
+                        : 'Start Game!'}
                 </button>
               </div>
             </div>
@@ -396,38 +416,74 @@ export default function LobbyScreen({ waitingForOthers = false }) {
                 {/* Rounds */}
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Rounds</label>
-                  <div className="flex gap-1.5">
-                    {[1, 3, 5, 7].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => updateSettings({ rounds: n })}
-                        className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                          gameState.settings.rounds === n
+                  {gameState.settings.gameMode === 'battleRoyale' ? (
+                    /* Elimination mode: auto-calculated rounds based on player count */
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 py-2 rounded-lg text-sm font-bold text-center bg-red-500/20 border border-red-500/50 text-red-400">
+                        {Math.max(1, players.length - 1)} rounds
+                      </div>
+                      <div className="text-xs text-white/40">
+                        = {players.length} players - 1
+                      </div>
+                    </div>
+                  ) : (
+                    /* Classic mode: manual round selection */
+                    <div className="flex gap-1.5">
+                      {[1, 3, 5, 7].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            updateSettings({ rounds: n });
+                            setCustomRoundsInput('');
+                            setIsTypingRounds(false);
+                          }}
+                          className={`flex-1 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                            gameState.settings.rounds === n && !isTypingRounds
+                              ? 'bg-wordle-green text-white'
+                              : 'bg-white/10 text-white/60 hover:bg-white/20'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={2}
+                        value={isTypingRounds ? customRoundsInput : (![1, 3, 5, 7].includes(gameState.settings.rounds) ? gameState.settings.rounds : '')}
+                        onFocus={() => {
+                          setIsTypingRounds(true);
+                          if (![1, 3, 5, 7].includes(gameState.settings.rounds)) {
+                            setCustomRoundsInput(String(gameState.settings.rounds));
+                          } else {
+                            setCustomRoundsInput('');
+                          }
+                        }}
+                        onChange={(e) => {
+                          const rawVal = e.target.value.replace(/[^0-9]/g, '');
+                          setCustomRoundsInput(rawVal);
+                          if (rawVal !== '') {
+                            const val = Math.min(99, Math.max(1, parseInt(rawVal) || 1));
+                            updateSettings({ rounds: val });
+                          }
+                        }}
+                        onBlur={() => {
+                          setIsTypingRounds(false);
+                          if (customRoundsInput === '' || [1, 3, 5, 7].includes(parseInt(customRoundsInput))) {
+                            setCustomRoundsInput('');
+                          }
+                        }}
+                        placeholder="#"
+                        className={`w-12 py-1.5 rounded-lg text-sm font-bold text-center transition-all ${
+                          (isTypingRounds && customRoundsInput !== '') || ![1, 3, 5, 7].includes(gameState.settings.rounds)
                             ? 'bg-wordle-green text-white'
                             : 'bg-white/10 text-white/60 hover:bg-white/20'
                         }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <input
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={![1, 3, 5, 7].includes(gameState.settings.rounds) ? gameState.settings.rounds : ''}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1;
-                        updateSettings({ rounds: Math.min(99, Math.max(1, val)) });
-                      }}
-                      placeholder="#"
-                      className={`w-12 py-1.5 rounded-lg text-sm font-bold text-center transition-all ${
-                        ![1, 3, 5, 7].includes(gameState.settings.rounds)
-                          ? 'bg-wordle-green text-white'
-                          : 'bg-white/10 text-white/60 hover:bg-white/20'
-                      }`}
-                    />
-                  </div>
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Time Per Round */}
@@ -585,7 +641,14 @@ export default function LobbyScreen({ waitingForOthers = false }) {
               <div className="flex items-center justify-center gap-6 text-sm">
                 <div>
                   <span className="text-white/40">Rounds: </span>
-                  <span className="font-bold">{gameState.settings.rounds}</span>
+                  <span className={`font-bold ${gameState.settings.gameMode === 'battleRoyale' ? 'text-red-400' : ''}`}>
+                    {gameState.settings.gameMode === 'battleRoyale'
+                      ? Math.max(1, players.length - 1)
+                      : gameState.settings.rounds}
+                  </span>
+                  {gameState.settings.gameMode === 'battleRoyale' && (
+                    <span className="text-white/30 text-xs ml-1">(auto)</span>
+                  )}
                 </div>
                 <div>
                   <span className="text-white/40">Time: </span>

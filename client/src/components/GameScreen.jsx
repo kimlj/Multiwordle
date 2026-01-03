@@ -235,7 +235,8 @@ export default function GameScreen({ showResults = false }) {
 
   const players = Object.values(gameState.players);
   const currentPlayer = gameState.players[playerId];
-  const otherPlayers = players.filter(p => p.id !== playerId);
+  // Filter out eliminated players from the grid - they shouldn't be shown in active play
+  const otherPlayers = players.filter(p => p.id !== playerId && !p.eliminated);
   const isBattleRoyale = gameState.settings?.gameMode === 'battleRoyale';
   const isHardcore = gameState.settings?.hardcoreMode || false;
   const isEliminated = currentPlayer?.eliminated || false;
@@ -606,14 +607,27 @@ export default function GameScreen({ showResults = false }) {
                       {eliminatedThisRound.length > 1 ? `${eliminatedThisRound.length} ELIMINATED` : 'ELIMINATED'}
                     </span>
                   </div>
-                  {eliminatedThisRound.map((eliminated, idx) => (
-                    <div key={eliminated.id} className="text-center mt-2">
-                      <span className="font-bold text-lg text-red-300">{eliminated.name}</span>
-                      <span className="text-white/60 ml-2">
-                        scored {eliminated.score} pts • #{eliminated.placement} place
-                      </span>
+                  {/* Compact layout when 5+ players eliminated */}
+                  {eliminatedThisRound.length >= 5 ? (
+                    <div className="mt-2 flex flex-wrap justify-center gap-2">
+                      {eliminatedThisRound.map((eliminated) => (
+                        <div key={eliminated.id} className="bg-red-500/20 rounded-lg px-2 py-1 text-xs">
+                          <span className="font-bold text-red-300">{eliminated.name}</span>
+                          <span className="text-white/40 ml-1">#{eliminated.placement}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    /* Normal layout for 1-4 eliminated */
+                    eliminatedThisRound.map((eliminated) => (
+                      <div key={eliminated.id} className="text-center mt-2">
+                        <span className="font-bold text-lg text-red-300">{eliminated.name}</span>
+                        <span className="text-white/60 ml-2">
+                          scored {eliminated.score} pts • #{eliminated.placement} place
+                        </span>
+                      </div>
+                    ))
+                  )}
                   {eliminatedThisRound.some(e => e.id === playerId) && (
                     <div className="text-center text-red-300 text-sm mt-2">
                       You've been eliminated! You can spectate the remaining rounds.
