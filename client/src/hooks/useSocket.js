@@ -147,7 +147,6 @@ export function useSocket() {
                 useGameStore.getState().resetKeyboardStatus();
               }
 
-              showToast('Reconnected to game!', 2000);
             } else {
               // Room no longer exists or can't rejoin
               clearSession();
